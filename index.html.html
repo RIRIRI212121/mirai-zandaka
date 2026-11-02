@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <title>みらい残高・完全版</title>
+  <title>みらい残高・カレンダー改善版</title>
   <style>
     :root{font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',sans-serif;color:#172338;background:#f4f6fa}
     *{box-sizing:border-box}
@@ -28,14 +28,22 @@
     .legend{font-size:14px}
     .swatch{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:7px}
     
-    /* カレンダー用スタイル（支出金額表示対応） */
+    /* 画像を模したカレンダーデザイン */
     .calendar{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}
-    .day{padding:6px 2px;text-align:center;background:#edf0fa;color:#24314a;border:1px solid #dbe0ea;border-radius:7px;min-height:55px;font-size:13px;margin:0;display:flex;flex-direction:column;justify-content:space-between;cursor:pointer}
-    .day.selected{background:#6154d8;color:white}
-    .day.selected .cal-expense{color:#ffe4e6;background:rgba(255,255,255,0.2)}
-    .day.worked{border:2px solid #1a9e81}
-    .cal-day-num{font-weight:bold}
-    .cal-expense{font-size:10px;color:#b62e42;background:#ffe4e6;border-radius:3px;padding:1px;overflow:hidden;text-overflow:ellipsis}
+    .day{padding:8px 2px;text-align:center;background:#fff;color:#24314a;border:1px solid #e2e8f0;border-radius:8px;min-height:55px;font-size:14px;margin:0;display:flex;flex-direction:column;align-items:center;justify-content:space-between;cursor:pointer}
+    .day:hover{background:#f8fafc}
+    .day.selected{border:2px solid #6154d8;background:#f5f3ff}
+    .cal-day-num{font-weight:600}
+    .cal-dots{display:flex;gap:3px;height:6px;align-items:center;justify-content:center}
+    .dot{width:5px;height:5px;border-radius:50%}
+    .dot-shift{background:#16a58a} /* シフトがある日の緑ドット */
+    .dot-expense{background:#ef4444} /* 支出がある日の赤ドット */
+
+    /* タップした日の詳細表示エリア */
+    .day-details{background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:14px;margin-top:14px}
+    .day-details h3{font-size:15px;margin:0 0 10px;color:#1e293b;border-bottom:2px solid #cbd5e1;padding-bottom:6px}
+    .detail-item{font-size:13px;padding:6px 0;border-bottom:1px dashed #e2e8f0;display:flex;justify-content:space-between}
+    .detail-item:last-child{border:0}
 
     .notice{font-size:13px;color:#56647a;line-height:1.6}
     .status{color:#087e61;font-size:14px;font-weight:700;margin-top:8px;min-height:20px}
@@ -48,7 +56,6 @@
     .gear{font-size:25px;cursor:pointer;list-style:none;background:#eef0fa;border-radius:12px;padding:8px 13px;user-select:none}
     .gear::-webkit-details-marker{display:none}
     .settings{background:#f7f8ff;border:1px solid #dce0f5;border-radius:12px;padding:14px;margin:12px 0}
-    .settings-note{font-size:12px;color:#5a657a;line-height:1.6}
     .settings-save{width:100%}
     .topnav{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:16px 0 20px}
     .topnav label{display:block;text-align:center;text-decoration:none;padding:19px 5px;border-radius:12px;border:2px solid #6255d9;background:#fff;color:#372ca6;font-weight:800;font-size:17px;touch-action:manipulation;cursor:pointer}
@@ -60,7 +67,7 @@
 <body>
 <div class="wrap">
   <h1>みらい残高</h1>
-  <p class="muted">iPhone対応版｜カレンダー・支出連携・シフト管理</p>
+  <p class="muted">iPhone対応版｜カレンダー改善・詳細表示</p>
 
   <input class="nav-choice" type="radio" name="nav" id="nav-home" checked>
   <input class="nav-choice" type="radio" name="nav" id="nav-shift">
@@ -115,7 +122,7 @@
   <section class="page" id="shift">
     <div class="card">
       <div class="shift-head">
-        <h2>シフト管理</h2>
+        <h2>シフト＆スケジュール</h2>
         <details id="shiftSettings">
           <summary class="gear" aria-label="シフト設定">⚙️</summary>
           <div class="settings">
@@ -132,21 +139,27 @@
       </div>
       <div class="row">
         <button class="secondary" id="prev" type="button">前月</button>
-        <strong id="monthLabel">2026年10月</strong>
+        <strong id="monthLabel">2026年11月</strong>
         <button class="secondary" id="next" type="button">翌月</button>
       </div>
-      <p class="small">日付をタップしてシフトを登録（支出がある日は金額が表示されます）</p>
+      <p class="small">日付をタップすると、下のエリアにその日のシフトや支出の詳細が表示されます（🟢シフト・🔴支出）</p>
       
       <div class="calendar" id="calendar"></div>
 
-      <p class="small" id="calendarHelp">日付を選択すると、下のシフト入力欄が更新される。</p>
-      <div class="metric" id="monthlyPay">¥0</div>
+      <!-- ご要望の配置：日付ごとの詳細と、そのすぐ下に月ごとの給与見込み（稼げる額の合計） -->
+      <div class="day-details" id="dayDetails">
+        <h3 id="selectedLabel">日付の詳細</h3>
+        <div id="dayDetailContent"><span class="small">日付を選択してください</span></div>
+      </div>
+
+      <div class="metric" id="monthlyPay" style="margin-top:20px;">¥0</div>
       <div class="small">当月の給与見込み（交通費込み・額面）</div>
     </div>
 
     <div class="card">
-      <h2 id="selectedLabel">シフト入力</h2>
+      <h2>シフト入力・編集</h2>
       <form id="shiftForm" onsubmit="return false">
+        <label>勤務先（メモなど）</label><input id="shiftMemo" type="text" placeholder="例：らぽっぽ">
         <label>開始時刻</label><input id="start" type="time" value="09:00" required>
         <label>終了時刻</label><input id="end" type="time" value="17:00" required>
         <label>休憩時間（分）</label><input id="break" type="number" min="0" value="60" required>
@@ -154,7 +167,6 @@
         <label>時給（円）</label><input id="wage" type="number" min="1" placeholder="1200" required>
         <label>交通費（円）</label><input id="transport" type="number" min="0" value="0" required>
         <label>土日特別手当（円）</label><input id="weekendBonus" type="number" min="0" value="0">
-        <label>メモ</label><input id="shiftMemo" type="text">
         <button type="button" data-save="1">シフトを保存</button>
         <button class="secondary delete" type="button" id="removeShift" style="width:100%; margin-top:8px;">この日のシフトを削除</button>
         <div class="status" id="shiftStatus"></div>
@@ -216,7 +228,7 @@
       localStorage.setItem(key,JSON.stringify(data));
       return true;
     }catch(e){
-      alert('保存できませんでした。ブラウザのストレージ容量を確認してください。');
+      alert('保存できませんでした。');
       return false;
     }
   }
@@ -264,8 +276,8 @@
     el('legend').innerHTML=entries.map(function(p,i){return '<div class="line"><span><i class="swatch" style="background:'+colors[i%colors.length]+'"></i>'+esc(p[0])+'</span><b>'+yen(p[1])+'</b></div>'}).join('');
     el('expenseList').innerHTML=data.expenses.slice().reverse().map(function(e){return '<div class="line"><span>'+esc(e.date)+' '+esc(e.category)+'<br><span class="small">'+esc(e.memo)+'</span></span><b>'+yen(e.amount)+'</b></div>'}).join('');
     
-    // 支出が更新されたらカレンダーの表示も更新する
     renderCalendar();
+    selectDate(selected);
   }
 
   el('expenseForm').querySelector('[data-save]').addEventListener('click',function(e){
@@ -294,14 +306,18 @@
       localStorage.setItem(settingsKey,JSON.stringify(settings));
       el('settingsStatus').textContent='設定を保存しました';
     }catch(e){el('settingsStatus').textContent='保存エラー';}
+    selectDate(selected);
   });
 
   var view=new Date(), selected=today();
 
   function selectDate(s){
     selected=s;
-    el('selectedLabel').textContent=s+' のシフト';
-    var v=data.shifts[s]||{};
+    el('selectedLabel').textContent=s+' の詳細';
+    var shift=data.shifts[s];
+    
+    // フォームに反映
+    var v=shift||{};
     el('start').value=v.start||'09:00';
     el('end').value=v.end||'17:00';
     el('break').value=v.breakMin==null?60:v.breakMin;
@@ -311,6 +327,29 @@
     el('weekendBonus').value=v.weekendBonus==null?bonusFor(s):v.weekendBonus;
     el('shiftMemo').value=v.memo||'';
     el('shiftStatus').textContent='';
+
+    // タップした日の詳細（シフト・支出）をカード内に表示
+    var contentHtml='';
+    
+    // シフト情報
+    if(shift){
+      contentHtml+='<div style="margin-bottom:8px;"><strong>シフト：</strong> '+esc(shift.memo||'勤務')+' ('+esc(shift.start)+' 〜 '+esc(shift.end)+')</div>';
+    }else{
+      contentHtml+='<div style="margin-bottom:8px; color:#69758a;">シフト：登録なし</div>';
+    }
+
+    // 支出情報
+    var dayExpenses=data.expenses.filter(function(e){return e.date===s});
+    if(dayExpenses.length>0){
+      contentHtml+='<div style="margin-top:6px;"><strong>支出：</strong></div>';
+      dayExpenses.forEach(function(e){
+        contentHtml+='<div class="detail-item"><span>'+esc(e.category)+' ('+esc(e.memo||'メモなし')+')</span><b>'+yen(e.amount)+'</b></div>';
+      });
+    }else{
+      contentHtml+='<div style="margin-top:6px; color:#69758a;">支出：登録なし</div>';
+    }
+
+    el('dayDetailContent').innerHTML=contentHtml;
     renderCalendar();
   }
 
@@ -336,11 +375,9 @@
     el('monthLabel').textContent=y+'年'+(m+1)+'月';
     var first=new Date(y,m,1).getDay(), days=new Date(y,m+1,0).getDate();
     
-    // 日付ごとの支出合計をマッピング
     var expenseMap={};
     data.expenses.forEach(function(e){
-      if(!expenseMap[e.date]) expenseMap[e.date]=0;
-      expenseMap[e.date]+=Number(e.amount)||0;
+      if(!expenseMap[e.date]) expenseMap[e.date]=true;
     });
 
     var html='';
@@ -353,15 +390,17 @@
       var date=y+'-'+String(m+1).padStart(2,'0')+'-'+String(d).padStart(2,'0');
       var isSelected=(date===selected);
       var hasShift=!!data.shifts[date];
-      var expAmount=expenseMap[date]||0;
+      var hasExpense=!!expenseMap[date];
 
-      html+='<button type="button" class="day'+(isSelected?' selected':'')+(hasShift?' worked':'')+'" data-date="'+date+'">';
+      html+='<button type="button" class="day'+(isSelected?' selected':'')+'" data-date="'+date+'">';
       html+='<span class="cal-day-num">'+d+'</span>';
-      if(expAmount>0){
-        html+='<span class="cal-expense">'+yen(expAmount)+'</span>';
-      }else{
-        html+='<span></span>';
-      }
+      
+      // 画像のような丸ドットを表示
+      html+='<span class="cal-dots">';
+      if(hasShift) html+='<span class="dot dot-shift"></span>';
+      if(hasExpense) html+='<span class="dot dot-expense"></span>';
+      html+='</span>';
+      
       html+='</button>';
     }
 
@@ -393,11 +432,12 @@
       transport:Number(el('transport').value),
       weekendBonus:Number(el('weekendBonus').value),
       nightRate:settings.night,
-      memo:el('shiftMemo').value
+      memo:el('shiftMemo').value.trim()
     };
     data.shifts[selected]=v;
     save();
     renderCalendar();
+    selectDate(selected);
     el('shiftStatus').textContent='保存しました：見込み '+yen(pay(v));
   });
 
@@ -425,7 +465,7 @@
 
   el('subForm').querySelector('[data-save]').addEventListener('click',function(e){
     e.preventDefault();
-    var s={name:el('subName').value.trim(),amount:Number(el('subAmount').value),cycle:el('subCycle').value,day:Number(el('subDay').value),month:Number(el('subMonth').value)};
+    var s={name:el('subName'].value.trim(),amount:Number(el('subAmount').value),cycle:el('subCycle').value,day:Number(el('subDay').value),month:Number(el('subMonth').value)};
     if(!s.name||!(s.amount>0)) return;
     data.subs.push(s);
     save();
@@ -435,7 +475,6 @@
     el('subAmount').value='';
   });
 
-  // 初期化実行
   el('settingWage').value=settings.wage;
   el('settingTransport').value=settings.transport;
   el('settingSaturday').value=settings.saturday;
