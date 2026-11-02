@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <title>みらい残高・完全版</title>
+  <title>みらい残高・決定版</title>
   <style>
     :root{font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',sans-serif;color:#172338;background:#f4f6fa}
     *{box-sizing:border-box}
@@ -36,8 +36,9 @@
     .cal-day-num{font-weight:600}
     .cal-dots{display:flex;gap:3px;height:6px;align-items:center;justify-content:center}
     .dot{width:5px;height:5px;border-radius:50%}
-    .dot-shift{background:#16a58a} /* 緑：シフト */
-    .dot-expense{background:#ef4444} /* 赤：支出・サブスク */
+    .dot-shift{background:#16a58a} /* 🟢 シフト */
+    .dot-expense{background:#ef4444} /* 🔴 支出/サブスク */
+    .dot-income{background:#3b82f6} /* 🔵 収入 */
 
     /* 日付ごとの詳細エリア */
     .day-details{background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:14px;margin-top:14px}
@@ -45,13 +46,11 @@
     .detail-item{font-size:13px;padding:6px 0;border-bottom:1px dashed #e2e8f0;display:flex;justify-content:space-between}
     .detail-item:last-child{border:0}
 
-    .notice{font-size:13px;color:#56647a;line-height:1.6}
     .status{color:#087e61;font-size:14px;font-weight:700;margin-top:8px;min-height:20px}
     .row{display:flex;align-items:center;justify-content:space-between;gap:8px}
     .row button{margin:0;width:auto}
     .subitem{border-left:5px solid var(--accent,#6154d8);padding-left:12px}
     .small{font-size:12px;color:#69758a}
-    .spacer{height:10px}
     .shift-head{display:flex;align-items:center;justify-content:space-between;gap:12px}
     .gear{font-size:25px;cursor:pointer;list-style:none;background:#eef0fa;border-radius:12px;padding:8px 13px;user-select:none}
     .gear::-webkit-details-marker{display:none}
@@ -62,12 +61,14 @@
     .topnav label:active{background:#e9e5ff}
     .nav-choice{position:absolute;opacity:0;width:1px;height:1px;pointer-events:none}
     #nav-home:checked ~ .topnav label[for="nav-home"], #nav-shift:checked ~ .topnav label[for="nav-shift"], #nav-subs:checked ~ .topnav label[for="nav-subs"]{background:#6255d9;color:white}
+    .budget-warning{color:#ef4444!important}
+    .app-guide{background:#eff6ff;border:1px dashed #3b82f6;border-radius:12px;padding:12px;margin-top:20px;font-size:12px;color:#1e40af;line-height:1.5}
   </style>
 </head>
 <body>
 <div class="wrap">
   <h1>みらい残高</h1>
-  <p class="muted">iPhone対応版｜カレンダー・サブスク自動連動</p>
+  <p class="muted">iPhone対応版｜開いてすぐ入力＆残高予測</p>
 
   <input class="nav-choice" type="radio" name="nav" id="nav-home" checked>
   <input class="nav-choice" type="radio" name="nav" id="nav-shift">
@@ -79,42 +80,66 @@
     <label for="nav-subs">サブスク</label>
   </nav>
 
-  <!-- 家計簿ページ -->
+  <!-- 家計簿ページ（開いてすぐ入力できる配置） -->
   <section class="page" id="home">
+    <!-- 1. 最優先：今日使ったお金／その他収入の入力欄 -->
     <div class="card">
-      <h2>家計簿</h2>
+      <h2>収支の入力</h2>
       <form id="expenseForm" onsubmit="return false">
+        <label>収支の種別</label>
+        <select id="type">
+          <option value="expense">支出（使ったお金）</option>
+          <option value="income">その他収入（おこづかい・売上など）</option>
+        </select>
+
         <label>金額（円）</label>
-        <input id="amount" type="number" min="1" required>
+        <input id="amount" type="number" min="1" required placeholder="例：1200">
+
         <label>カテゴリー</label>
         <select id="category">
           <option>食費</option><option>日用品</option><option>交通費</option><option>娯楽</option>
-          <option>交際費</option><option>衣服・美容</option><option>サブスク</option><option>その他</option>
+          <option>交際費</option><option>衣服・美容</option><option>サブスク</option><option>臨時収入</option><option>その他</option>
         </select>
+
         <label>メモ</label>
-        <input id="memo" type="text">
+        <input id="memo" type="text" placeholder="例：ランチ、フリマ売上">
+
         <label>日付</label>
         <input id="date" type="date" required>
+
         <button type="button" data-save="1">保存して反映</button>
         <div class="status" id="expenseStatus"></div>
       </form>
     </div>
 
+    <!-- 2. みらい残高 ＆ 今月の残り予算カウンター -->
     <div class="card">
-      <h2>支出の円グラフ</h2>
+      <h2>みらい残高・使える予算</h2>
+      <label>現在の口座実残高（円）</label>
+      <input id="balance" type="number" min="0" placeholder="例：100000">
+
+      <label>今月の目標予算（上限）</label>
+      <input id="monthlyBudget" type="number" min="0" placeholder="例：50000">
+
+      <div style="margin-top:15px; border-top:1px solid #eee; padding-top:10px;">
+        <div class="small">引き落とし予定を引いた「みらい残高」</div>
+        <div class="metric" id="futureBalance">¥0</div>
+        <div class="small" id="balanceDetail"></div>
+      </div>
+
+      <div style="margin-top:15px; border-top:1px solid #eee; padding-top:10px;">
+        <div class="small">今月あと使える予算</div>
+        <div class="metric" id="remainingBudget">¥0</div>
+      </div>
+    </div>
+
+    <!-- 3. 支出の円グラフ・一覧 -->
+    <div class="card">
+      <h2>今月の支出グラフ</h2>
       <div class="metric" id="expenseTotal">¥0</div>
       <div class="pie" id="pie"></div>
       <div id="legend" class="legend"></div>
       <div id="expenseList"></div>
-    </div>
-
-    <div class="card">
-      <h2>みらい残高</h2>
-      <label>計算の起点となる残高（円）</label>
-      <input id="balance" type="number" min="0" placeholder="例：100000">
-      <p class="small">ここに入力した残高から、登録済み家計簿の全支出を差し引きます。</p>
-      <div class="metric" id="futureBalance">¥0</div>
-      <div class="small" id="balanceDetail"></div>
     </div>
   </section>
 
@@ -126,8 +151,9 @@
         <details id="shiftSettings">
           <summary class="gear" aria-label="シフト設定">⚙️</summary>
           <div class="settings">
-            <h3>給与設定</h3>
+            <h3>給料・勤務設定</h3>
             <label>基本時給（円）</label><input id="settingWage" type="number" min="1" value="1200">
+            <label>毎月の給料日（日）</label><input id="settingPayDay" type="number" min="1" max="31" value="25">
             <label>1勤務あたりの交通費（円）</label><input id="settingTransport" type="number" min="0" value="0">
             <label>土曜日の特別手当（円／勤務）</label><input id="settingSaturday" type="number" min="0" value="0">
             <label>日曜日の特別手当（円／勤務）</label><input id="settingSunday" type="number" min="0" value="0">
@@ -142,11 +168,11 @@
         <strong id="monthLabel">2026年11月</strong>
         <button class="secondary" id="next" type="button">翌月</button>
       </div>
-      <p class="small">日付をタップすると詳細が表示されます（🟢シフト・🔴支出/サブスク）</p>
+      <p class="small">日付タップで詳細表示（🟢シフト・🔴支出/サブスク・🔵収入）</p>
       
       <div class="calendar" id="calendar"></div>
 
-      <!-- 日付ごとの詳細と給与見込みの合計 -->
+      <!-- 日付ごとの詳細と給与見込み合計 -->
       <div class="day-details" id="dayDetails">
         <h3 id="selectedLabel">日付の詳細</h3>
         <div id="dayDetailContent"><span class="small">日付を選択してください</span></div>
@@ -200,6 +226,12 @@
       <div id="subList"></div>
     </div>
   </section>
+
+  <!-- お友達布教用ガイド案内 -->
+  <div class="app-guide">
+    💡 <strong>アプリみたいに使う方法：</strong><br>
+    ブラウザのメニューから「ホーム画面に追加」を押すと、スマホのホーム画面からワンタップで開けるようになります！
+  </div>
 </div>
 
 <script>
@@ -207,14 +239,14 @@
   'use strict';
   var key='mirai-iphone-anchor-v1';
   var settingsKey='mirai-shift-settings-v1';
-  var settings={wage:1200,transport:0,saturday:0,sunday:0,night:25};
+  var settings={wage:1200,payDay:25,transport:0,saturday:0,sunday:0,night:25};
   
   try{
     var storedSettings=JSON.parse(localStorage.getItem(settingsKey));
     if(storedSettings) settings=Object.assign(settings,storedSettings);
   }catch(e){}
 
-  var data={expenses:[],shifts:{},subs:[],balance:0};
+  var data={expenses:[],shifts:{},subs:[],balance:0,monthlyBudget:50000};
   try{
     var saved=JSON.parse(localStorage.getItem(key));
     if(saved&&typeof saved==='object') data=Object.assign(data,saved);
@@ -243,24 +275,28 @@
 
   el('date').value=today();
   el('balance').value=data.balance||'';
+  el('monthlyBudget').value=data.monthlyBudget||'';
+  
   el('balance').addEventListener('change',function(){
     data.balance=Number(this.value)||0;
+    save();
+    renderAll();
+  });
+  el('monthlyBudget').addEventListener('change',function(){
+    data.monthlyBudget=Number(this.value)||0;
     save();
     renderAll();
   });
 
   var colors=['#6154d8','#16a58a','#ef8e4a','#e45d7a','#4b9be5','#e1b44a','#8e7caa','#64748b'];
 
-  // サブスクを現在の表示月に自動で家計簿として連動させる関数
+  // サブスクを現在の表示月に自動連動させる関数
   function getCombinedExpenses(year, month) {
     var list = [];
-    // 通常の家計簿
     data.expenses.forEach(function(e){ list.push(e); });
     
-    // サブスクの展開（指定された年月に合致するもの）
     data.subs.forEach(function(s){
       var day = s.day || 1;
-      // 日付がその月に存在するかチェック（例: 2月31日などは調整）
       var lastD = new Date(year, month + 1, 0).getDate();
       var actualDay = Math.min(day, lastD);
       var mm = String(month + 1).padStart(2, '0');
@@ -269,10 +305,10 @@
 
       if(s.cycle === 'yearly') {
         if(Number(s.month) === (month + 1)) {
-          list.push({amount: s.amount, category: 'サブスク', memo: s.name + ' (年払い)', date: subDate});
+          list.push({amount: s.amount, category: 'サブスク', memo: s.name + ' (年払い)', date: subDate, type: 'expense'});
         }
       } else {
-        list.push({amount: s.amount, category: 'サブスク', memo: s.name, date: subDate});
+        list.push({amount: s.amount, category: 'サブスク', memo: s.name, date: subDate, type: 'expense'});
       }
     });
     return list;
@@ -284,13 +320,35 @@
     var y=view.getFullYear(), m=view.getMonth();
     var currentMonthExpenses = getCombinedExpenses(y, m);
     
-    var total = currentMonthExpenses.reduce(function(a,e){return a+(Number(e.amount)||0)},0);
-    el('expenseTotal').textContent=yen(total);
-    el('futureBalance').textContent=yen((Number(data.balance)||0)-total);
-    el('balanceDetail').textContent=yen(Number(data.balance)||0)+' − '+yen(total);
+    // 支出のみ集計
+    var expenseOnly = currentMonthExpenses.filter(function(e){return e.type !== 'income'});
+    var totalExpense = expenseOnly.reduce(function(a,e){return a+(Number(e.amount)||0)},0);
+    
+    // 収入のみ集計
+    var incomeOnly = currentMonthExpenses.filter(function(e){return e.type === 'income'});
+    var totalIncome = incomeOnly.reduce(function(a,e){return a+(Number(e.amount)||0)},0);
 
+    el('expenseTotal').textContent=yen(totalExpense);
+    
+    // みらい残高計算（実残高 + 収入 - 支出）
+    var futureBal = (Number(data.balance)||0) + totalIncome - totalExpense;
+    el('futureBalance').textContent=yen(futureBal);
+    el('balanceDetail').textContent=yen(Number(data.balance)||0)+' ＋ 収入'+yen(totalIncome)+' − 支出'+yen(totalExpense);
+
+    // 今月あと使える予算カウンター
+    var remain = (Number(data.monthlyBudget)||0) - totalExpense;
+    var remainEl = el('remainingBudget');
+    remainEl.textContent = yen(remain);
+    if(remain < 0) {
+      remainEl.classList.add('budget-warning');
+      remainEl.textContent += ' (予算オーバー！)';
+    } else {
+      remainEl.classList.remove('budget-warning');
+    }
+
+    // 支出円グラフ描画
     var grouped={};
-    currentMonthExpenses.forEach(function(e){
+    expenseOnly.forEach(function(e){
       var cat=String(e.category||'その他');
       grouped[cat]=(grouped[cat]||0)+(Number(e.amount)||0);
     });
@@ -298,7 +356,7 @@
     var entries=Object.keys(grouped).map(function(k){return [k,grouped[k]]});
     var angle=0, stops=[];
     entries.forEach(function(p,i){
-      var slice=total>0?360*(p[1]/total):0;
+      var slice=totalExpense>0?360*(p[1]/totalExpense):0;
       var end=angle+slice;
       if(slice>0) stops.push(colors[i%colors.length]+' '+angle+'deg '+end+'deg');
       angle=end;
@@ -306,19 +364,23 @@
     el('pie').style.background=stops.length?'conic-gradient('+stops.join(',')+')':'#e6e9f2';
     el('legend').innerHTML=entries.map(function(p,i){return '<div class="line"><span><i class="swatch" style="background:'+colors[i%colors.length]+'"></i>'+esc(p[0])+'</span><b>'+yen(p[1])+'</b></div>'}).join('');
     
-    // 手動入力の家計簿一覧を表示
-    el('expenseList').innerHTML=data.expenses.slice().reverse().map(function(e){return '<div class="line"><span>'+esc(e.date)+' '+esc(e.category)+'<br><span class="small">'+esc(e.memo)+'</span></span><b>'+yen(e.amount)+'</b></div>'}).join('');
+    // 履歴一覧
+    el('expenseList').innerHTML=data.expenses.slice().reverse().map(function(e){
+      var isInc = e.type === 'income';
+      return '<div class="line"><span>'+esc(e.date)+' ['+(isInc?'収入':'支出')+'] '+esc(e.category)+'<br><span class="small">'+esc(e.memo)+'</span></span><b style="color:'+(isInc?'#2563eb':'#333')+'">'+(isInc?'+':'-')+yen(e.amount)+'</b></div>';
+    }).join('');
   }
 
   el('expenseForm').querySelector('[data-save]').addEventListener('click',function(e){
     e.preventDefault();
     var amount=Number(el('amount').value);
     var dateValue=el('date').value;
+    var typeValue=el('type').value;
     if(!(amount>0)||!dateValue){el('expenseStatus').textContent='金額と日付を入力してください';return;}
-    data.expenses.push({amount:amount,category:el('category').value,memo:el('memo').value.trim(),date:dateValue});
+    data.expenses.push({amount:amount,category:el('category').value,memo:el('memo').value.trim(),date:dateValue,type:typeValue});
     save();
     renderAll();
-    el('expenseStatus').textContent='保存しました：'+yen(amount)+'（'+el('category').value+'）';
+    el('expenseStatus').textContent='保存しました：'+(typeValue==='income'?'収入 ':'支出 ')+yen(amount);
     el('amount').value='';
     el('memo').value='';
   });
@@ -329,9 +391,9 @@
   }
 
   el('saveShiftSettings').addEventListener('click',function(){
-    var w=Number(el('settingWage').value),t=Number(el('settingTransport').value),sat=Number(el('settingSaturday').value),sun=Number(el('settingSunday').value),n=Number(el('settingNight').value);
+    var w=Number(el('settingWage').value),pd=Number(el('settingPayDay').value),t=Number(el('settingTransport').value),sat=Number(el('settingSaturday').value),sun=Number(el('settingSunday').value),n=Number(el('settingNight').value);
     if(!(w>0)){el('settingsStatus').textContent='時給は0円より大きくしてください';return;}
-    settings={wage:w,transport:t,saturday:sat,sunday:sun,night:n};
+    settings={wage:w,payDay:pd,transport:t,saturday:sat,sunday:sun,night:n};
     try{
       localStorage.setItem(settingsKey,JSON.stringify(settings));
       el('settingsStatus').textContent='設定を保存しました';
@@ -366,12 +428,13 @@
     var dayExpenses = getCombinedExpenses(y, m).filter(function(e){return e.date===s});
     
     if(dayExpenses.length>0){
-      contentHtml+='<div style="margin-top:6px;"><strong>支出・サブスク：</strong></div>';
+      contentHtml+='<div style="margin-top:6px;"><strong>収支・サブスク：</strong></div>';
       dayExpenses.forEach(function(e){
-        contentHtml+='<div class="detail-item"><span>'+esc(e.category)+' ('+esc(e.memo||'メモなし')+')</span><b>'+yen(e.amount)+'</b></div>';
+        var isInc = e.type === 'income';
+        contentHtml+='<div class="detail-item"><span>['+(isInc?'収入':'支出')+'] '+esc(e.category)+' ('+esc(e.memo||'メモなし')+')</span><b style="color:'+(isInc?'#2563eb':'#ef4444')+'">'+(isInc?'+':'-')+yen(e.amount)+'</b></div>';
       });
     }else{
-      contentHtml+='<div style="margin-top:6px; color:#69758a;">支出・サブスク：登録なし</div>';
+      contentHtml+='<div style="margin-top:6px; color:#69758a;">収支・サブスク：登録なし</div>';
     }
 
     el('dayDetailContent').innerHTML=contentHtml;
@@ -400,9 +463,10 @@
     var first=new Date(y,m,1).getDay(), days=new Date(y,m+1,0).getDate();
     
     var currentMonthExpenses = getCombinedExpenses(y, m);
-    var expenseMap={};
+    var expenseMap={}, incomeMap={};
     currentMonthExpenses.forEach(function(e){
-      if(!expenseMap[e.date]) expenseMap[e.date]=true;
+      if(e.type === 'income') incomeMap[e.date]=true;
+      else expenseMap[e.date]=true;
     });
 
     var html='';
@@ -416,6 +480,7 @@
       var isSelected=(date===selected);
       var hasShift=!!data.shifts[date];
       var hasExpense=!!expenseMap[date];
+      var hasIncome=!!incomeMap[date];
 
       html+='<button type="button" class="day'+(isSelected?' selected':'')+'" data-date="'+date+'">';
       html+='<span class="cal-day-num">'+d+'</span>';
@@ -423,6 +488,7 @@
       html+='<span class="cal-dots">';
       if(hasShift) html+='<span class="dot dot-shift"></span>';
       if(hasExpense) html+='<span class="dot dot-expense"></span>';
+      if(hasIncome) html+='<span class="dot dot-income"></span>';
       html+='</span>';
       
       html+='</button>';
@@ -512,6 +578,7 @@
   }
 
   el('settingWage').value=settings.wage;
+  el('settingPayDay').value=settings.payDay||25;
   el('settingTransport').value=settings.transport;
   el('settingSaturday').value=settings.saturday;
   el('settingSunday').value=settings.sunday;
