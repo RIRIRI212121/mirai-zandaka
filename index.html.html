@@ -68,7 +68,7 @@
 <body>
 <div class="wrap">
   <h1>みらい残高</h1>
-  <p class="muted">iPhone対応版｜開いてすぐ入力＆残高予測</p>
+  <p class="muted">iPhone対応版｜みらい残高ファーストビュー</p>
 
   <input class="nav-choice" type="radio" name="nav" id="nav-home" checked>
   <input class="nav-choice" type="radio" name="nav" id="nav-shift">
@@ -80,9 +80,30 @@
     <label for="nav-subs">サブスク</label>
   </nav>
 
-  <!-- 家計簿ページ（開いてすぐ入力できる配置） -->
+  <!-- 家計簿ページ -->
   <section class="page" id="home">
-    <!-- 1. 最優先：今日使ったお金／その他収入の入力欄 -->
+    <!-- 1. 一番上：みらい残高 ＆ 今月の残り予算カウンター -->
+    <div class="card">
+      <h2>みらい残高・使える予算</h2>
+      <label>現在の口座実残高（円）</label>
+      <input id="balance" type="number" min="0" placeholder="例：100000">
+
+      <label>今月の目標予算（上限）</label>
+      <input id="monthlyBudget" type="number" min="0" placeholder="例：50000">
+
+      <div style="margin-top:15px; border-top:1px solid #eee; padding-top:10px;">
+        <div class="small">引き落とし予定を引いた「みらい残高」</div>
+        <div class="metric" id="futureBalance">¥0</div>
+        <div class="small" id="balanceDetail"></div>
+      </div>
+
+      <div style="margin-top:15px; border-top:1px solid #eee; padding-top:10px;">
+        <div class="small">今月あと使える予算</div>
+        <div class="metric" id="remainingBudget">¥0</div>
+      </div>
+    </div>
+
+    <!-- 2. その下：収支（支出・その他収入）の入力欄 -->
     <div class="card">
       <h2>収支の入力</h2>
       <form id="expenseForm" onsubmit="return false">
@@ -110,27 +131,6 @@
         <button type="button" data-save="1">保存して反映</button>
         <div class="status" id="expenseStatus"></div>
       </form>
-    </div>
-
-    <!-- 2. みらい残高 ＆ 今月の残り予算カウンター -->
-    <div class="card">
-      <h2>みらい残高・使える予算</h2>
-      <label>現在の口座実残高（円）</label>
-      <input id="balance" type="number" min="0" placeholder="例：100000">
-
-      <label>今月の目標予算（上限）</label>
-      <input id="monthlyBudget" type="number" min="0" placeholder="例：50000">
-
-      <div style="margin-top:15px; border-top:1px solid #eee; padding-top:10px;">
-        <div class="small">引き落とし予定を引いた「みらい残高」</div>
-        <div class="metric" id="futureBalance">¥0</div>
-        <div class="small" id="balanceDetail"></div>
-      </div>
-
-      <div style="margin-top:15px; border-top:1px solid #eee; padding-top:10px;">
-        <div class="small">今月あと使える予算</div>
-        <div class="metric" id="remainingBudget">¥0</div>
-      </div>
     </div>
 
     <!-- 3. 支出の円グラフ・一覧 -->
@@ -290,7 +290,6 @@
 
   var colors=['#6154d8','#16a58a','#ef8e4a','#e45d7a','#4b9be5','#e1b44a','#8e7caa','#64748b'];
 
-  // サブスクを現在の表示月に自動連動させる関数
   function getCombinedExpenses(year, month) {
     var list = [];
     data.expenses.forEach(function(e){ list.push(e); });
@@ -320,22 +319,18 @@
     var y=view.getFullYear(), m=view.getMonth();
     var currentMonthExpenses = getCombinedExpenses(y, m);
     
-    // 支出のみ集計
     var expenseOnly = currentMonthExpenses.filter(function(e){return e.type !== 'income'});
     var totalExpense = expenseOnly.reduce(function(a,e){return a+(Number(e.amount)||0)},0);
     
-    // 収入のみ集計
     var incomeOnly = currentMonthExpenses.filter(function(e){return e.type === 'income'});
     var totalIncome = incomeOnly.reduce(function(a,e){return a+(Number(e.amount)||0)},0);
 
     el('expenseTotal').textContent=yen(totalExpense);
     
-    // みらい残高計算（実残高 + 収入 - 支出）
     var futureBal = (Number(data.balance)||0) + totalIncome - totalExpense;
     el('futureBalance').textContent=yen(futureBal);
     el('balanceDetail').textContent=yen(Number(data.balance)||0)+' ＋ 収入'+yen(totalIncome)+' − 支出'+yen(totalExpense);
 
-    // 今月あと使える予算カウンター
     var remain = (Number(data.monthlyBudget)||0) - totalExpense;
     var remainEl = el('remainingBudget');
     remainEl.textContent = yen(remain);
@@ -346,7 +341,6 @@
       remainEl.classList.remove('budget-warning');
     }
 
-    // 支出円グラフ描画
     var grouped={};
     expenseOnly.forEach(function(e){
       var cat=String(e.category||'その他');
@@ -364,7 +358,6 @@
     el('pie').style.background=stops.length?'conic-gradient('+stops.join(',')+')':'#e6e9f2';
     el('legend').innerHTML=entries.map(function(p,i){return '<div class="line"><span><i class="swatch" style="background:'+colors[i%colors.length]+'"></i>'+esc(p[0])+'</span><b>'+yen(p[1])+'</b></div>'}).join('');
     
-    // 履歴一覧
     el('expenseList').innerHTML=data.expenses.slice().reverse().map(function(e){
       var isInc = e.type === 'income';
       return '<div class="line"><span>'+esc(e.date)+' ['+(isInc?'収入':'支出')+'] '+esc(e.category)+'<br><span class="small">'+esc(e.memo)+'</span></span><b style="color:'+(isInc?'#2563eb':'#333')+'">'+(isInc?'+':'-')+yen(e.amount)+'</b></div>';
