@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <title>みらい残高・決定版</title>
+  <title>みらい残高・完全版</title>
   <style>
     :root{font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',sans-serif;color:#172338;background:#f4f6fa}
     *{box-sizing:border-box}
@@ -17,9 +17,9 @@
     .card{background:white;border:1px solid #e4e8f0;border-radius:17px;padding:18px;margin:14px 0;box-shadow:0 2px 8px #20305008}
     label{display:block;font-size:13px;font-weight:700;margin:12px 0 5px}
     input,select{width:100%;padding:12px;font-size:16px;border:1px solid #cbd5e1;border-radius:9px;background:white}
-    button{background:#6154d8;color:white;border:0;border-radius:10px;padding:13px 16px;font-weight:700;font-size:15px;margin-top:12px;width:100%}
+    button{background:#6154d8;color:white;border:0;border-radius:10px;padding:13px 16px;font-weight:700;font-size:15px;margin-top:12px;width:100%;cursor:pointer}
     button.secondary{background:#eef0fa;color:#433c91}
-    button.delete{background:#fff0f0;color:#b62e42;padding:8px;margin:0;width:auto}
+    button.delete{background:#fff0f0;color:#b62e42;padding:6px 12px;margin:0;width:auto;font-size:12px;border-radius:6px;border:1px solid #fecaca}
     .grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
     .metric{font-size:28px;font-weight:800;margin:8px 0}
     .line{padding:11px 0;border-bottom:1px solid #edf0f4;display:flex;justify-content:space-between;gap:8px;align-items:center}
@@ -43,7 +43,7 @@
     /* 日付ごとの詳細エリア */
     .day-details{background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:14px;margin-top:14px}
     .day-details h3{font-size:15px;margin:0 0 10px;color:#1e293b;border-bottom:2px solid #cbd5e1;padding-bottom:6px}
-    .detail-item{font-size:13px;padding:6px 0;border-bottom:1px dashed #e2e8f0;display:flex;justify-content:space-between}
+    .detail-item{font-size:13px;padding:6px 0;border-bottom:1px dashed #e2e8f0;display:flex;justify-content:space-between;align-items:center}
     .detail-item:last-child{border:0}
 
     .status{color:#087e61;font-size:14px;font-weight:700;margin-top:8px;min-height:20px}
@@ -304,10 +304,10 @@
 
       if(s.cycle === 'yearly') {
         if(Number(s.month) === (month + 1)) {
-          list.push({amount: s.amount, category: 'サブスク', memo: s.name + ' (年払い)', date: subDate, type: 'expense'});
+          list.push({amount: s.amount, category: 'サブスク', memo: s.name + ' (年払い)', date: subDate, type: 'expense', isSub: true});
         }
       } else {
-        list.push({amount: s.amount, category: 'サブスク', memo: s.name, date: subDate, type: 'expense'});
+        list.push({amount: s.amount, category: 'サブスク', memo: s.name, date: subDate, type: 'expense', isSub: true});
       }
     });
     return list;
@@ -336,7 +336,6 @@
     remainEl.textContent = yen(remain);
     if(remain < 0) {
       remainEl.classList.add('budget-warning');
-      remainEl.textContent += ' (予算オーバー！)';
     } else {
       remainEl.classList.remove('budget-warning');
     }
@@ -358,10 +357,21 @@
     el('pie').style.background=stops.length?'conic-gradient('+stops.join(',')+')':'#e6e9f2';
     el('legend').innerHTML=entries.map(function(p,i){return '<div class="line"><span><i class="swatch" style="background:'+colors[i%colors.length]+'"></i>'+esc(p[0])+'</span><b>'+yen(p[1])+'</b></div>'}).join('');
     
-    el('expenseList').innerHTML=data.expenses.slice().reverse().map(function(e){
+    // 家計簿履歴（個別の削除ボタン付き）
+    el('expenseList').innerHTML=data.expenses.slice().reverse().map(function(e, revIdx){
+      var realIdx = data.expenses.length - 1 - revIdx;
       var isInc = e.type === 'income';
-      return '<div class="line"><span>'+esc(e.date)+' ['+(isInc?'収入':'支出')+'] '+esc(e.category)+'<br><span class="small">'+esc(e.memo)+'</span></span><b style="color:'+(isInc?'#2563eb':'#333')+'">'+(isInc?'+':'-')+yen(e.amount)+'</b></div>';
+      return '<div class="line"><span>'+esc(e.date)+' ['+(isInc?'収入':'支出')+'] '+esc(e.category)+'<br><span class="small">'+esc(e.memo)+'</span></span><div style="display:flex; align-items:center; gap:8px;"><b style="color:'+(isInc?'#2563eb':'#333')+'">'+(isInc?'+':'-')+yen(e.amount)+'</b><button type="button" class="delete" data-exp-index="'+realIdx+'">削除</button></div></div>';
     }).join('');
+
+    el('expenseList').querySelectorAll('[data-exp-index]').forEach(function(b){
+      b.onclick=function(){
+        var idx = Number(this.getAttribute('data-exp-index'));
+        data.expenses.splice(idx, 1);
+        save();
+        renderAll();
+      };
+    });
   }
 
   el('expenseForm').querySelector('[data-save]').addEventListener('click',function(e){
@@ -412,7 +422,7 @@
 
     var contentHtml='';
     if(shift){
-      contentHtml+='<div style="margin-bottom:8px;"><strong>シフト：</strong> '+esc(shift.memo||'勤務')+' ('+esc(shift.start)+' 〜 '+esc(shift.end)+')</div>';
+      contentHtml+='<div style="margin-bottom:8px; display:flex; justify-content:space-between; align-items:center;"><span><strong>シフト：</strong> '+esc(shift.memo||'勤務')+' ('+esc(shift.start)+' 〜 '+esc(shift.end)+')</span><button type="button" class="delete" id="dayShiftDeleteBtn">削除</button></div>';
     }else{
       contentHtml+='<div style="margin-bottom:8px; color:#69758a;">シフト：登録なし</div>';
     }
@@ -431,6 +441,15 @@
     }
 
     el('dayDetailContent').innerHTML=contentHtml;
+
+    var dayShiftDelBtn = el('dayShiftDeleteBtn');
+    if(dayShiftDelBtn) {
+      dayShiftDelBtn.onclick = function(){
+        delete data.shifts[s];
+        save();
+        renderAll();
+      };
+    }
   }
 
   function pay(v){
@@ -533,12 +552,12 @@
     var total=0;
     el('subList').innerHTML=data.subs.map(function(s,i){
       total+=s.cycle==='yearly'?s.amount/12:s.amount;
-      return '<div class="line subitem" style="--accent:'+colors[i%colors.length]+'"><span><b>'+esc(s.name)+'</b><br><span class="small">'+(s.cycle==='yearly'?'毎年'+s.month+'月':'毎月')+s.day+'日</span></span><span><b>'+yen(s.amount)+'</b><br><button type="button" class="delete" data-index="'+i+'">削除</button></span></div>';
+      return '<div class="line subitem" style="--accent:'+colors[i%colors.length]+'"><span><b>'+esc(s.name)+'</b><br><span class="small">'+(s.cycle==='yearly'?'毎年'+s.month+'月':'毎月')+s.day+'日</span></span><span><b>'+yen(s.amount)+'</b><br><button type="button" class="delete" data-sub-index="'+i+'">削除</button></span></div>';
     }).join('');
     el('subTotal').textContent=yen(total);
-    el('subList').querySelectorAll('[data-index]').forEach(function(b){
+    el('subList').querySelectorAll('[data-sub-index]').forEach(function(b){
       b.onclick=function(){
-        data.subs.splice(Number(this.getAttribute('data-index')),1);
+        data.subs.splice(Number(this.getAttribute('data-sub-index')),1);
         save();
         renderAll();
       };
