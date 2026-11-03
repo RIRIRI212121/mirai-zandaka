@@ -28,6 +28,13 @@
     .legend{font-size:14px}
     .swatch{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:7px}
     
+    /* 月別棒グラフ用スタイル */
+    .bar-chart{display:flex;align-items:flex-end;justify-content:space-between;height:150px;padding:20px 5px 10px;border-bottom:2px solid #cbd5e1;gap:4px}
+    .bar-col{flex:1;display:flex;flex-direction:column;align-items:center;height:100%;justify-content:flex-end}
+    .bar-fill{width:100%;max-width:18px;background:#6154d8;border-radius:4px 4px 0 0;min-height:2px;transition:height 0.3s}
+    .bar-fill.minus{background:#ef4444}
+    .bar-label{font-size:10px;color:#69758a;margin-top:6px}
+
     /* カレンダーデザイン */
     .calendar{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}
     .day{padding:6px 2px;text-align:center;background:#fff;color:#24314a;border:1px solid #e2e8f0;border-radius:8px;min-height:60px;font-size:13px;margin:0;display:flex;flex-direction:column;align-items:center;justify-content:space-between;cursor:pointer}
@@ -36,11 +43,10 @@
     .cal-day-num{font-weight:600}
     .cal-dots{display:flex;gap:3px;height:6px;align-items:center;justify-content:center}
     .dot{width:5px;height:5px;border-radius:50%}
-    .dot-shift{background:#16a58a} /* 🟢 シフト */
-    .dot-expense{background:#ef4444} /* 🔴 支出/サブスク */
-    .dot-income{background:#3b82f6} /* 🔵 収入 */
+    .dot-shift{background:#16a58a}
+    .dot-expense{background:#ef4444}
+    .dot-income{background:#3b82f6}
 
-    /* 日付ごとの詳細エリア */
     .day-details{background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:14px;margin-top:14px}
     .day-details h3{font-size:15px;margin:0 0 10px;color:#1e293b;border-bottom:2px solid #cbd5e1;padding-bottom:6px}
     .detail-item{font-size:13px;padding:6px 0;border-bottom:1px dashed #e2e8f0;display:flex;justify-content:space-between;align-items:center}
@@ -63,6 +69,9 @@
     #nav-home:checked ~ .topnav label[for="nav-home"], #nav-shift:checked ~ .topnav label[for="nav-shift"], #nav-subs:checked ~ .topnav label[for="nav-subs"]{background:#6255d9;color:white}
     .budget-warning{color:#ef4444!important}
     .app-guide{background:#eff6ff;border:1px dashed #3b82f6;border-radius:12px;padding:12px;margin-top:20px;font-size:12px;color:#1e40af;line-height:1.5}
+    
+    .year-view-modal{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:99999;padding:20px;overflow-y:auto}
+    .year-view-content{background:white;border-radius:16px;max-width:650px;margin:20px auto;padding:20px}
   </style>
 </head>
 <body>
@@ -84,7 +93,10 @@
   <section class="page" id="home">
     <!-- 1. 一番上：みらい残高 ＆ 今月の残り予算カウンター -->
     <div class="card">
-      <h2>みらい残高・使える予算</h2>
+      <div class="row" style="margin-bottom:10px;">
+        <h2 style="margin:0;">みらい残高・使える予算</h2>
+        <button type="button" class="secondary" id="openYearView" style="padding:6px 12px; font-size:13px;">📊 年単位で見る</button>
+      </div>
       <label>現在の口座実残高（円）</label>
       <input id="balance" type="number" min="0" placeholder="例：100000">
 
@@ -103,7 +115,7 @@
       </div>
     </div>
 
-    <!-- 2. その下：収支（支出・その他収入）の入力欄 -->
+    <!-- 2. その下：収支の入力欄 -->
     <div class="card">
       <h2>収支の入力</h2>
       <form id="expenseForm" onsubmit="return false">
@@ -133,7 +145,7 @@
       </form>
     </div>
 
-    <!-- 3. 支出の円グラフ・一覧（月切り替えボタン付き） -->
+    <!-- 3. 支出の円グラフ・一覧（月切り替え付き） -->
     <div class="card">
       <div class="row">
         <button class="secondary" id="expPrevMonth" type="button">前月</button>
@@ -176,7 +188,6 @@
       
       <div class="calendar" id="calendar"></div>
 
-      <!-- 日付ごとの詳細と給与見込み合計 -->
       <div class="day-details" id="dayDetails">
         <h3 id="selectedLabel">日付の詳細</h3>
         <div id="dayDetailContent"><span class="small">日付を選択してください</span></div>
@@ -231,10 +242,40 @@
     </div>
   </section>
 
-  <!-- お友達布教用ガイド案内 -->
   <div class="app-guide">
     💡 <strong>アプリみたいに使う方法：</strong><br>
     ブラウザのメニューから「ホーム画面に追加」を押すと、スマホのホーム画面からワンタップで開けるようになります！
+  </div>
+</div>
+
+<!-- 年間集計モーダル画面 -->
+<div class="year-view-modal" id="yearViewModal">
+  <div class="year-view-content">
+    <div class="row" style="margin-bottom:15px;">
+      <h2 style="margin:0;" id="yearLabel">2026年の収支レポート</h2>
+      <button type="button" class="secondary" id="closeYearView" style="padding:6px 12px; font-size:13px;">✕ 閉じる</button>
+    </div>
+
+    <div class="card" style="margin-top:0;">
+      <div class="small">年間総収入</div>
+      <div class="metric" id="yearIncome" style="color:#2563eb;">¥0</div>
+      <div class="small" style="margin-top:10px;">年間総支出</div>
+      <div class="metric" id="yearExpense" style="color:#ef4444;">¥0</div>
+      <div class="small" style="margin-top:10px;">年間収支バランス（貯蓄増減）</div>
+      <div class="metric" id="yearBalance">¥0</div>
+    </div>
+
+    <div class="card">
+      <h2>月別資産残高（収支）の推移</h2>
+      <p class="small">月ごとのプラス・マイナスを棒グラフで表示</p>
+      <div class="bar-chart" id="yearBarChart"></div>
+    </div>
+
+    <div class="card">
+      <h2>年間カテゴリー別支出</h2>
+      <div class="pie" id="yearPie"></div>
+      <div id="yearLegend" class="legend"></div>
+    </div>
   </div>
 </div>
 
@@ -319,7 +360,6 @@
 
   var view=new Date(), expView=new Date(), selected=today();
 
-  // 支出グラフの前月・翌月切替処理
   el('expPrevMonth').onclick = function(){
     expView = new Date(expView.getFullYear(), expView.getMonth() - 1, 1);
     renderExpenses();
@@ -334,8 +374,6 @@
     el('expMonthLabel').textContent = y + '年' + (m + 1) + '月の支出グラフ';
 
     var currentMonthExpenses = getCombinedExpenses(y, m);
-
-    // その月（y, m）に該当する支出・収入データを抽出
     var prefix = y + '-' + String(m + 1).padStart(2, '0');
     var filteredExpenses = currentMonthExpenses.filter(function(e){
       return e.date && e.date.slice(0, 7) === prefix;
@@ -349,7 +387,6 @@
 
     el('expenseTotal').textContent=yen(totalExpense);
     
-    // 全体のみらい残高・残り予算
     var allCurrentExpenses = getCombinedExpenses(new Date().getFullYear(), new Date().getMonth());
     var allExpOnly = allCurrentExpenses.filter(function(e){return e.type !== 'income'});
     var allTotExp = allExpOnly.reduce(function(a,e){return a+(Number(e.amount)||0)},0);
@@ -369,7 +406,6 @@
       remainEl.classList.remove('budget-warning');
     }
 
-    // 円グラフ描画
     var grouped={};
     expenseOnly.forEach(function(e){
       var cat=String(e.category||'その他');
@@ -387,7 +423,6 @@
     el('pie').style.background=stops.length?'conic-gradient('+stops.join(',')+')':'#e6e9f2';
     el('legend').innerHTML=entries.map(function(p,i){return '<div class="line"><span><i class="swatch" style="background:'+colors[i%colors.length]+'"></i>'+esc(p[0])+'</span><b>'+yen(p[1])+'</b></div>'}).join('');
     
-    // 表示中の月の家計簿履歴を表示（手動入力データのみ削除ボタンを設置）
     var rawFiltered = data.expenses.filter(function(e){ return e.date && e.date.slice(0, 7) === prefix; });
     
     if(rawFiltered.length === 0) {
@@ -617,6 +652,87 @@
     el('subName').value='';
     el('subAmount').value='';
   });
+
+  // 年間集計レンダリング
+  function renderYearView() {
+    var currentYear = expView.getFullYear();
+    el('yearLabel').textContent = currentYear + '年の収支レポート';
+
+    var totalInc = 0, totalExp = 0;
+    var monthNetMap = {};
+    var categoryMap = {};
+
+    for(var m = 0; m < 12; m++) {
+      var list = getCombinedExpenses(currentYear, m);
+      var prefix = currentYear + '-' + String(m + 1).padStart(2, '0');
+      var monthList = list.filter(function(e){ return e.date && e.date.slice(0, 7) === prefix; });
+
+      var inc = 0, exp = 0;
+      monthList.forEach(function(e){
+        var amt = Number(e.amount) || 0;
+        if(e.type === 'income') {
+          inc += amt;
+        } else {
+          exp += amt;
+          var cat = e.category || 'その他';
+          categoryMap[cat] = (categoryMap[cat] || 0) + amt;
+        }
+      });
+
+      totalInc += inc;
+      totalExp += exp;
+      monthNetMap[m + 1] = inc - exp;
+    }
+
+    el('yearIncome').textContent = yen(totalInc);
+    el('yearExpense').textContent = yen(totalExp);
+    
+    var netBal = totalInc - totalExp;
+    var netEl = el('yearBalance');
+    netEl.textContent = (netBal >= 0 ? '+' : '') + yen(netBal);
+    netEl.style.color = netBal >= 0 ? '#2563eb' : '#ef4444';
+
+    // 1. 月別棒グラフの生成
+    var maxVal = Math.max.apply(null, Object.values(monthNetMap).map(Math.abs));
+    if(maxVal === 0) maxVal = 1;
+
+    var barHtml = '';
+    for(var m = 1; m <= 12; m++) {
+      var val = monthNetMap[m] || 0;
+      var heightPercent = Math.round((Math.abs(val) / maxVal) * 100);
+      var isMinus = val < 0;
+
+      barHtml += '<div class="bar-col">';
+      barHtml += '<div class="bar-fill ' + (isMinus ? 'minus' : '') + '" style="height:' + Math.max(heightPercent, 2) + '%;" title="' + m + '月: ' + yen(val) + '"></div>';
+      barHtml += '<div class="bar-label">' + m + '月</div>';
+      barHtml += '</div>';
+    }
+    el('yearBarChart').innerHTML = barHtml;
+
+    // 2. 年間カテゴリー円グラフの生成
+    var catEntries = Object.keys(categoryMap).map(function(k){ return [k, categoryMap[k]]; });
+    var angle = 0, stops = [];
+    catEntries.forEach(function(p, i){
+      var slice = totalExp > 0 ? 360 * (p[1] / totalExp) : 0;
+      var end = angle + slice;
+      if(slice > 0) stops.push(colors[i % colors.length] + ' ' + angle + 'deg ' + end + 'deg');
+      angle = end;
+    });
+
+    el('yearPie').style.background = stops.length ? 'conic-gradient(' + stops.join(',') + ')' : '#e6e9f2';
+    el('yearLegend').innerHTML = catEntries.map(function(p, i){
+      return '<div class="line"><span><i class="swatch" style="background:' + colors[i % colors.length] + '"></i>' + esc(p[0]) + '</span><b>' + yen(p[1]) + '</b></div>';
+    }).join('');
+  }
+
+  // 年間集計モーダル開閉
+  el('openYearView').onclick = function(){
+    renderYearView();
+    el('yearViewModal').style.display = 'block';
+  };
+  el('closeYearView').onclick = function(){
+    el('yearViewModal').style.display = 'none';
+  };
 
   function renderAll(){
     renderExpenses();
