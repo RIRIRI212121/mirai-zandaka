@@ -133,9 +133,13 @@
       </form>
     </div>
 
-    <!-- 3. 支出の円グラフ・一覧 -->
+    <!-- 3. 支出の円グラフ・一覧（月切り替えボタン付き） -->
     <div class="card">
-      <h2>今月の支出グラフ</h2>
+      <div class="row">
+        <button class="secondary" id="expPrevMonth" type="button">前月</button>
+        <strong id="expMonthLabel">---</strong>
+        <button class="secondary" id="expNextMonth" type="button">翌月</button>
+      </div>
       <div class="metric" id="expenseTotal">¥0</div>
       <div class="pie" id="pie"></div>
       <div id="legend" class="legend"></div>
@@ -313,25 +317,50 @@
     return list;
   }
 
-  var view=new Date(), selected=today();
+  var view=new Date(), expView=new Date(), selected=today();
+
+  // 支出グラフの前月・翌月切替処理
+  el('expPrevMonth').onclick = function(){
+    expView = new Date(expView.getFullYear(), expView.getMonth() - 1, 1);
+    renderExpenses();
+  };
+  el('expNextMonth').onclick = function(){
+    expView = new Date(expView.getFullYear(), expView.getMonth() + 1, 1);
+    renderExpenses();
+  };
 
   function renderExpenses(){
-    var y=view.getFullYear(), m=view.getMonth();
+    var y=expView.getFullYear(), m=expView.getMonth();
+    el('expMonthLabel').textContent = y + '年' + (m + 1) + '月の支出グラフ';
+
     var currentMonthExpenses = getCombinedExpenses(y, m);
+
+    // その月（y, m）に該当する支出・収入データを抽出
+    var prefix = y + '-' + String(m + 1).padStart(2, '0');
+    var filteredExpenses = currentMonthExpenses.filter(function(e){
+      return e.date && e.date.slice(0, 7) === prefix;
+    });
     
-    var expenseOnly = currentMonthExpenses.filter(function(e){return e.type !== 'income'});
+    var expenseOnly = filteredExpenses.filter(function(e){return e.type !== 'income'});
     var totalExpense = expenseOnly.reduce(function(a,e){return a+(Number(e.amount)||0)},0);
     
-    var incomeOnly = currentMonthExpenses.filter(function(e){return e.type === 'income'});
+    var incomeOnly = filteredExpenses.filter(function(e){return e.type === 'income'});
     var totalIncome = incomeOnly.reduce(function(a,e){return a+(Number(e.amount)||0)},0);
 
     el('expenseTotal').textContent=yen(totalExpense);
     
-    var futureBal = (Number(data.balance)||0) + totalIncome - totalExpense;
-    el('futureBalance').textContent=yen(futureBal);
-    el('balanceDetail').textContent=yen(Number(data.balance)||0)+' ＋ 収入'+yen(totalIncome)+' − 支出'+yen(totalExpense);
+    // 全体のみらい残高・残り予算
+    var allCurrentExpenses = getCombinedExpenses(new Date().getFullYear(), new Date().getMonth());
+    var allExpOnly = allCurrentExpenses.filter(function(e){return e.type !== 'income'});
+    var allTotExp = allExpOnly.reduce(function(a,e){return a+(Number(e.amount)||0)},0);
+    var allIncOnly = allCurrentExpenses.filter(function(e){return e.type === 'income'});
+    var allTotInc = allIncOnly.reduce(function(a,e){return a+(Number(e.amount)||0)},0);
 
-    var remain = (Number(data.monthlyBudget)||0) - totalExpense;
+    var futureBal = (Number(data.balance)||0) + allTotInc - allTotExp;
+    el('futureBalance').textContent=yen(futureBal);
+    el('balanceDetail').textContent=yen(Number(data.balance)||0)+' ＋ 収入'+yen(allTotInc)+' − 支出'+yen(allTotExp);
+
+    var remain = (Number(data.monthlyBudget)||0) - allTotExp;
     var remainEl = el('remainingBudget');
     remainEl.textContent = yen(remain);
     if(remain < 0) {
@@ -340,6 +369,7 @@
       remainEl.classList.remove('budget-warning');
     }
 
+    // 円グラフ描画
     var grouped={};
     expenseOnly.forEach(function(e){
       var cat=String(e.category||'その他');
@@ -357,21 +387,27 @@
     el('pie').style.background=stops.length?'conic-gradient('+stops.join(',')+')':'#e6e9f2';
     el('legend').innerHTML=entries.map(function(p,i){return '<div class="line"><span><i class="swatch" style="background:'+colors[i%colors.length]+'"></i>'+esc(p[0])+'</span><b>'+yen(p[1])+'</b></div>'}).join('');
     
-    // 家計簿履歴（個別の削除ボタン付き）
-    el('expenseList').innerHTML=data.expenses.slice().reverse().map(function(e, revIdx){
-      var realIdx = data.expenses.length - 1 - revIdx;
-      var isInc = e.type === 'income';
-      return '<div class="line"><span>'+esc(e.date)+' ['+(isInc?'収入':'支出')+'] '+esc(e.category)+'<br><span class="small">'+esc(e.memo)+'</span></span><div style="display:flex; align-items:center; gap:8px;"><b style="color:'+(isInc?'#2563eb':'#333')+'">'+(isInc?'+':'-')+yen(e.amount)+'</b><button type="button" class="delete" data-exp-index="'+realIdx+'">削除</button></div></div>';
-    }).join('');
+    // 表示中の月の家計簿履歴を表示（手動入力データのみ削除ボタンを設置）
+    var rawFiltered = data.expenses.filter(function(e){ return e.date && e.date.slice(0, 7) === prefix; });
+    
+    if(rawFiltered.length === 0) {
+      el('expenseList').innerHTML = '<div class="small" style="text-align:center; padding:15px; color:#69758a;">この月の入力データはありません。</div>';
+    } else {
+      el('expenseList').innerHTML=rawFiltered.slice().reverse().map(function(e){
+        var realIdx = data.expenses.indexOf(e);
+        var isInc = e.type === 'income';
+        return '<div class="line"><span>'+esc(e.date)+' ['+(isInc?'収入':'支出')+'] '+esc(e.category)+'<br><span class="small">'+esc(e.memo)+'</span></span><div style="display:flex; align-items:center; gap:8px;"><b style="color:'+(isInc?'#2563eb':'#333')+'">'+(isInc?'+':'-')+yen(e.amount)+'</b><button type="button" class="delete" data-exp-index="'+realIdx+'">削除</button></div></div>';
+      }).join('');
 
-    el('expenseList').querySelectorAll('[data-exp-index]').forEach(function(b){
-      b.onclick=function(){
-        var idx = Number(this.getAttribute('data-exp-index'));
-        data.expenses.splice(idx, 1);
-        save();
-        renderAll();
-      };
-    });
+      el('expenseList').querySelectorAll('[data-exp-index]').forEach(function(b){
+        b.onclick=function(){
+          var idx = Number(this.getAttribute('data-exp-index'));
+          data.expenses.splice(idx, 1);
+          save();
+          renderAll();
+        };
+      });
+    }
   }
 
   el('expenseForm').querySelector('[data-save]').addEventListener('click',function(e){
