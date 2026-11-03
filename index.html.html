@@ -91,7 +91,6 @@
 
   <!-- 家計簿ページ -->
   <section class="page" id="home">
-    <!-- 1. 一番上：みらい残高 ＆ 今月の残り予算カウンター -->
     <div class="card">
       <div class="row" style="margin-bottom:10px;">
         <h2 style="margin:0;">みらい残高・使える予算</h2>
@@ -104,7 +103,7 @@
       <input id="monthlyBudget" type="number" min="0" placeholder="例：50000">
 
       <div style="margin-top:15px; border-top:1px solid #eee; padding-top:10px;">
-        <div class="small">引き落とし予定を引いた「みらい残高」</div>
+        <div class="small">給料反映後の「みらい残高」</div>
         <div class="metric" id="futureBalance">¥0</div>
         <div class="small" id="balanceDetail"></div>
       </div>
@@ -115,7 +114,6 @@
       </div>
     </div>
 
-    <!-- 2. その下：収支の入力欄 -->
     <div class="card">
       <h2>収支の入力</h2>
       <form id="expenseForm" onsubmit="return false">
@@ -145,7 +143,6 @@
       </form>
     </div>
 
-    <!-- 3. 支出の円グラフ・一覧（月切り替え付き） -->
     <div class="card">
       <div class="row">
         <button class="secondary" id="expPrevMonth" type="button">前月</button>
@@ -175,6 +172,7 @@
             <label>日曜日の特別手当（円／勤務）</label><input id="settingSunday" type="number" min="0" value="0">
             <label>深夜割増率（％）</label><input id="settingNight" type="number" min="0" max="200" step="1" value="25">
             <button type="button" id="saveShiftSettings" class="settings-save">設定を保存</button>
+            <button type="button" class="secondary" id="closeShiftSettings" style="width:100%; margin-top:8px;">戻る ＞</button>
             <div id="settingsStatus" class="status"></div>
           </div>
         </details>
@@ -197,7 +195,7 @@
       <div class="small">当月の給与見込み（交通費込み・額面）</div>
     </div>
 
-    <div class="card">
+    <div class="card" id="shiftInputCard">
       <h2>シフト入力・編集</h2>
       <form id="shiftForm" onsubmit="return false">
         <label>勤務先（メモなど）</label><input id="shiftMemo" type="text" placeholder="例：らぽっぽ">
@@ -360,6 +358,11 @@
 
   var view=new Date(), expView=new Date(), selected=today();
 
+  // 設定画面の「戻る ＞」ボタンで閉じる処理
+  el('closeShiftSettings').onclick = function(){
+    el('shiftSettings').removeAttribute('open');
+  };
+
   el('expPrevMonth').onclick = function(){
     expView = new Date(expView.getFullYear(), expView.getMonth() - 1, 1);
     renderExpenses();
@@ -368,6 +371,56 @@
     expView = new Date(expView.getFullYear(), expView.getMonth() + 1, 1);
     renderExpenses();
   };
+
+  function pay(v){
+    var a=v.start.split(':').map(Number), b=v.end.split(':').map(Number);
+    var s=a[0]*60+a[1], end=b[0]*60+b[1];
+    if(end<=s) end+=1440;
+    var duration=end-s;
+    var rest=Math.min(duration,Math.max(0,Number(v.breakMin)||0));
+    var worked=duration-rest;
+    var night=0;
+    for(var t=s; t<end; t++){
+      var hour=(t%1440)/60;
+      if(hour>=22||hour<5) night++;
+    }
+    night=Math.max(0,night-Math.max(0,Number(v.nightBreak)||0));
+    night=Math.min(night,worked);
+    return Math.round(worked/60*v.wage + night/60*v.wage*(v.nightRate==null?.25:v.nightRate/100) + (Number(v.transport)||0) + (Number(v.weekendBonus)||0));
+  }
+
+  // 給料日の口座反映計算（給料日を過ぎたら前月までの給料を口座にプラス）
+  function getReflectedBalance() {
+    var baseBal = Number(data.balance) || 0;
+    var now = new Date();
+    var curY = now.getFullYear();
+    var curM = now.getMonth();
+    var curD = now.getDate();
+    var payDay = Number(settings.payDay) || 25;
+
+    // 今月の給料日を過ぎているか判定
+    var targetY = curY, targetM = curM;
+    if(curD < payDay) {
+      // まだ今月の給料日に達していなければ、直近で支給されるのは先月分の給料
+      targetM -= 1;
+      if(targetM < 0) { targetM = 11; targetY -= 1; }
+    }
+
+    // 対象月（targetY, targetM）までの未反映の給料を合計してプラスする
+    var totalShiftPay = 0;
+    Object.keys(data.shifts).forEach(function(k){
+      var parts = k.split('-');
+      var sy = Number(parts[0]), sm = Number(parts[1]) - 1, sd = Number(parts[2]);
+      var shiftDate = new Date(sy, sm, sd);
+      var cutoffDate = new Date(targetY, targetM, payDay);
+
+      if(shiftDate <= cutoffDate) {
+        totalShiftPay += pay(data.shifts[k]);
+      }
+    });
+
+    return baseBal + totalShiftPay;
+  }
 
   function renderExpenses(){
     var y=expView.getFullYear(), m=expView.getMonth();
@@ -393,9 +446,10 @@
     var allIncOnly = allCurrentExpenses.filter(function(e){return e.type === 'income'});
     var allTotInc = allIncOnly.reduce(function(a,e){return a+(Number(e.amount)||0)},0);
 
-    var futureBal = (Number(data.balance)||0) + allTotInc - allTotExp;
+    var reflectedBal = getReflectedBalance();
+    var futureBal = reflectedBal + allTotInc - allTotExp;
     el('futureBalance').textContent=yen(futureBal);
-    el('balanceDetail').textContent=yen(Number(data.balance)||0)+' ＋ 収入'+yen(allTotInc)+' − 支出'+yen(allTotExp);
+    el('balanceDetail').textContent='口座ベース'+yen(reflectedBal)+' ＋ 収入'+yen(allTotInc)+' − 支出'+yen(allTotExp);
 
     var remain = (Number(data.monthlyBudget)||0) - allTotExp;
     var remainEl = el('remainingBudget');
@@ -495,7 +549,7 @@
     if(shift){
       contentHtml+='<div style="margin-bottom:8px; display:flex; justify-content:space-between; align-items:center;"><span><strong>シフト：</strong> '+esc(shift.memo||'勤務')+' ('+esc(shift.start)+' 〜 '+esc(shift.end)+')</span><button type="button" class="delete" id="dayShiftDeleteBtn">削除</button></div>';
     }else{
-      contentHtml+='<div style="margin-bottom:8px; color:#69758a;">シフト：登録なし</div>';
+      contentHtml+='<div style="margin-bottom:8px; display:flex; justify-content:space-between; align-items:center;"><span style="color:#69758a;">シフト：登録なし</span><button type="button" class="secondary" id="dayShiftAddBtn" style="padding:6px 12px; font-size:12px; margin:0; width:auto;">＋ この日に追加する</button></div>';
     }
 
     var y = view.getFullYear(), m = view.getMonth();
@@ -521,23 +575,14 @@
         renderAll();
       };
     }
-  }
 
-  function pay(v){
-    var a=v.start.split(':').map(Number), b=v.end.split(':').map(Number);
-    var s=a[0]*60+a[1], end=b[0]*60+b[1];
-    if(end<=s) end+=1440;
-    var duration=end-s;
-    var rest=Math.min(duration,Math.max(0,Number(v.breakMin)||0));
-    var worked=duration-rest;
-    var night=0;
-    for(var t=s; t<end; t++){
-      var hour=(t%1440)/60;
-      if(hour>=22||hour<5) night++;
+    var dayShiftAddBtn = el('dayShiftAddBtn');
+    if(dayShiftAddBtn) {
+      dayShiftAddBtn.onclick = function(){
+        // 下の入力欄へスクロール＆フォーカス
+        el('shiftInputCard').scrollIntoView({behavior: 'smooth'});
+      };
     }
-    night=Math.max(0,night-Math.max(0,Number(v.nightBreak)||0));
-    night=Math.min(night,worked);
-    return Math.round(worked/60*v.wage + night/60*v.wage*(v.nightRate==null?.25:v.nightRate/100) + (Number(v.transport)||0) + (Number(v.weekendBonus)||0));
   }
 
   function renderCalendar(){
@@ -653,7 +698,6 @@
     el('subAmount').value='';
   });
 
-  // 年間集計レンダリング
   function renderYearView() {
     var currentYear = expView.getFullYear();
     el('yearLabel').textContent = currentYear + '年の収支レポート';
@@ -692,7 +736,6 @@
     netEl.textContent = (netBal >= 0 ? '+' : '') + yen(netBal);
     netEl.style.color = netBal >= 0 ? '#2563eb' : '#ef4444';
 
-    // 1. 月別棒グラフの生成
     var maxVal = Math.max.apply(null, Object.values(monthNetMap).map(Math.abs));
     if(maxVal === 0) maxVal = 1;
 
@@ -709,7 +752,6 @@
     }
     el('yearBarChart').innerHTML = barHtml;
 
-    // 2. 年間カテゴリー円グラフの生成
     var catEntries = Object.keys(categoryMap).map(function(k){ return [k, categoryMap[k]]; });
     var angle = 0, stops = [];
     catEntries.forEach(function(p, i){
@@ -725,7 +767,6 @@
     }).join('');
   }
 
-  // 年間集計モーダル開閉
   el('openYearView').onclick = function(){
     renderYearView();
     el('yearViewModal').style.display = 'block';
