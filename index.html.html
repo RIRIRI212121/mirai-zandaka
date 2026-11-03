@@ -1,18 +1,20 @@
 <!doctype html>
 <html lang="ja">
 <head>
-  <!-- Google tag (gtag.js) -->
-<script async src="https://www.googletagmanager.com/gtag/js?id=G-ZLM2BEP6S6"></script>
-<script>
-  window.dataLayer = window.dataLayer || [];
-  function gtag(){dataLayer.push(arguments);}
-  gtag('js', new Date());
-
-  gtag('config', 'G-ZLM2BEP6S6');
-</script>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <title>みらい残高・完全版</title>
+
+  <!-- Google tag (gtag.js) -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-ZLM2BEP6S6"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+
+    gtag('config', 'G-ZLM2BEP6S6');
+  </script>
+
   <style>
     :root{font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',sans-serif;color:#172338;background:#f4f6fa}
     *{box-sizing:border-box}
@@ -37,14 +39,12 @@
     .legend{font-size:14px}
     .swatch{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:7px}
     
-    /* 月別棒グラフ用スタイル */
     .bar-chart{display:flex;align-items:flex-end;justify-content:space-between;height:150px;padding:20px 5px 10px;border-bottom:2px solid #cbd5e1;gap:4px}
     .bar-col{flex:1;display:flex;flex-direction:column;align-items:center;height:100%;justify-content:flex-end}
     .bar-fill{width:100%;max-width:18px;background:#6154d8;border-radius:4px 4px 0 0;min-height:2px;transition:height 0.3s}
     .bar-fill.minus{background:#ef4444}
     .bar-label{font-size:10px;color:#69758a;margin-top:6px}
 
-    /* カレンダーデザイン */
     .calendar{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}
     .day{padding:6px 2px;text-align:center;background:#fff;color:#24314a;border:1px solid #e2e8f0;border-radius:8px;min-height:60px;font-size:13px;margin:0;display:flex;flex-direction:column;align-items:center;justify-content:space-between;cursor:pointer}
     .day:hover{background:#f8fafc}
@@ -79,12 +79,14 @@
     .budget-warning{color:#ef4444!important}
     .app-guide{background:#eff6ff;border:1px dashed #3b82f6;border-radius:12px;padding:12px;margin-top:20px;font-size:12px;color:#1e40af;line-height:1.5}
     
-    /* 税金シミュレーター案内カード用スタイル */
     .tax-sim-box{background:#f0fdf4;border:1px solid #bbf7d0;border-radius:14px;padding:14px;margin-top:16px}
     .tax-sim-box h3{margin:0 0 6px;font-size:15px;color:#166534;display:flex;align-items:center;gap:6px}
     .tax-sim-box p{margin:0 0 10px;font-size:12px;color:#15803d;line-height:1.5}
     .tax-sim-btn{display:block;background:#16a34a;color:white;text-align:center;text-decoration:none;padding:11px 16px;border-radius:9px;font-weight:bold;font-size:14px;transition:background 0.2s}
     .tax-sim-btn:active{background:#15803d}
+
+    .preset-btn{background:#eef0fa;color:#433c91;border:1px solid #dce0f5;padding:8px 12px;border-radius:8px;font-size:13px;font-weight:bold;cursor:pointer;margin-right:6px;margin-bottom:6px}
+    .preset-container{margin-bottom:10px}
 
     .year-view-modal{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:99999;padding:20px;overflow-y:auto}
     .year-view-content{background:white;border-radius:16px;max-width:650px;margin:20px auto;padding:20px}
@@ -129,7 +131,6 @@
         <div class="metric" id="remainingBudget">¥0</div>
       </div>
 
-      <!-- 税金・手取り計算シミュレーター案内枠 -->
       <div class="tax-sim-box">
         <h3>💡 税金＆手取り計算シミュレーター</h3>
         <p>「年収が〇〇円のとき、税金で何円引かれて手元にいくら残る？」がひと目で計算できる専用ツールです。</p>
@@ -190,11 +191,10 @@
           <summary class="gear" aria-label="シフト設定">⚙️</summary>
           <div class="settings">
             <h3>給料・勤務設定</h3>
-            <label>基本時給（円）</label><input id="settingWage" type="number" min="1" value="1200">
+            <label>基本時給（平日）（円）</label><input id="settingWage" type="number" min="1" value="1200">
+            <label>土日祝の時給（円）</label><input id="settingWeekendWage" type="number" min="1" value="1300">
             <label>毎月の給料日（日）</label><input id="settingPayDay" type="number" min="1" max="31" value="25">
             <label>1勤務あたりの交通費（円）</label><input id="settingTransport" type="number" min="0" value="0">
-            <label>土曜日の特別手当（円／勤務）</label><input id="settingSaturday" type="number" min="0" value="0">
-            <label>日曜日の特別手当（円／勤務）</label><input id="settingSunday" type="number" min="0" value="0">
             <label>深夜割増率（％）</label><input id="settingNight" type="number" min="0" max="200" step="1" value="25">
             <button type="button" id="saveShiftSettings" class="settings-save">設定を保存</button>
             <button type="button" class="secondary" id="closeShiftSettings" style="width:100%; margin-top:8px;">戻る ＞</button>
@@ -222,16 +222,17 @@
 
     <div class="card" id="shiftInputCard">
       <h2>シフト入力・編集</h2>
+      <div id="shiftPresets" class="preset-container"></div>
+
       <form id="shiftForm" onsubmit="return false">
-        <label>勤務先（メモなど）</label><input id="shiftMemo" type="text" placeholder="例：らぽっぽ">
+        <label>勤務先（メモなど）</label><input id="shiftMemo" type="text" placeholder="例：セブンイレブン">
         <label>開始時刻</label><input id="start" type="time" value="09:00" required>
         <label>終了時刻</label><input id="end" type="time" value="17:00" required>
-        <label>休憩時間（分）</label><input id="break" type="number" min="0" value="60" required>
+        <label>休憩時間（分）※労働時間に応じて自動計算されます</label><input id="break" type="number" min="0" value="60" required>
         <label>深夜帯の休憩（分）</label><input id="nightBreak" type="number" min="0" value="0" required>
-        <label>時給（円）</label><input id="wage" type="number" min="1" placeholder="1200" required>
+        <label>時給（円）※曜日で自動切り替わります</label><input id="wage" type="number" min="1" placeholder="1200" required>
         <label>交通費（円）</label><input id="transport" type="number" min="0" value="0" required>
-        <label>土日特別手当（円）</label><input id="weekendBonus" type="number" min="0" value="0">
-        <button type="button" data-save="1">シフトを保存</button>
+        <button type="button" data-save="1">シフトを保存してパターン追加</button>
         <button class="secondary delete" type="button" id="removeShift" style="width:100%; margin-top:8px;">この日のシフトを削除</button>
         <div class="status" id="shiftStatus"></div>
       </form>
@@ -305,21 +306,22 @@
 <script>
 (function(){
   'use strict';
-  var key='mirai-iphone-anchor-v1';
-  var settingsKey='mirai-shift-settings-v1';
-  var settings={wage:1200,payDay:25,transport:0,saturday:0,sunday:0,night:25};
+  var key='mirai-iphone-anchor-v3';
+  var settingsKey='mirai-shift-settings-v3';
+  var settings={wage:1200,weekendWage:1300,payDay:25,transport:0,night:25};
   
   try{
     var storedSettings=JSON.parse(localStorage.getItem(settingsKey));
     if(storedSettings) settings=Object.assign(settings,storedSettings);
   }catch(e){}
 
-  var data={expenses:[],shifts:{},subs:[],balance:0,monthlyBudget:50000};
+  var data={expenses:[],shifts:{},subs:[],presets:[],balance:0,monthlyBudget:50000};
   try{
     var saved=JSON.parse(localStorage.getItem(key));
     if(saved&&typeof saved==='object') data=Object.assign(data,saved);
     if(!Array.isArray(data.expenses)) data.expenses=[];
     if(!Array.isArray(data.subs)) data.subs=[];
+    if(!Array.isArray(data.presets)) data.presets=[];
     if(!data.shifts||typeof data.shifts!=='object') data.shifts={};
   }catch(e){}
 
@@ -396,7 +398,22 @@
     renderExpenses();
   };
 
-  function pay(v){
+  function calcAutoBreak(startStr, endStr) {
+    var a=startStr.split(':').map(Number), b=endStr.split(':').map(Number);
+    var s=a[0]*60+a[1], end=b[0]*60+b[1];
+    if(end<=s) end+=1440;
+    var duration = (end - s) / 60;
+    if(duration > 8) return 60;
+    if(duration >= 6) return 45;
+    return 0;
+  }
+
+  function wageFor(dateStr) {
+    var day = new Date(dateStr + 'T12:00:00').getDay();
+    return (day === 0 || day === 6) ? (Number(settings.weekendWage) || 1300) : (Number(settings.wage) || 1200);
+  }
+
+  function pay(v, dateStr){
     var a=v.start.split(':').map(Number), b=v.end.split(':').map(Number);
     var s=a[0]*60+a[1], end=b[0]*60+b[1];
     if(end<=s) end+=1440;
@@ -410,7 +427,9 @@
     }
     night=Math.max(0,night-Math.max(0,Number(v.nightBreak)||0));
     night=Math.min(night,worked);
-    return Math.round(worked/60*v.wage + night/60*v.wage*(v.nightRate==null?.25:v.nightRate/100) + (Number(v.transport)||0) + (Number(v.weekendBonus)||0));
+
+    var currentWage = v.wage != null ? Number(v.wage) : wageFor(dateStr);
+    return Math.round(worked/60*currentWage + night/60*currentWage*(v.nightRate==null?.25:v.nightRate/100) + (Number(v.transport)||0));
   }
 
   function getReflectedBalance() {
@@ -435,7 +454,7 @@
       var cutoffDate = new Date(targetY, targetM, payDay);
 
       if(shiftDate <= cutoffDate) {
-        totalShiftPay += pay(data.shifts[k]);
+        totalShiftPay += pay(data.shifts[k], k);
       }
     });
 
@@ -533,15 +552,10 @@
     el('memo').value='';
   });
 
-  function bonusFor(s){
-    var day=new Date(s+'T12:00:00').getDay();
-    return day===6?Number(settings.saturday)||0:day===0?Number(settings.sunday)||0:0;
-  }
-
   el('saveShiftSettings').addEventListener('click',function(){
-    var w=Number(el('settingWage').value),pd=Number(el('settingPayDay').value),t=Number(el('settingTransport').value),sat=Number(el('settingSaturday').value),sun=Number(el('settingSunday').value),n=Number(el('settingNight').value);
+    var w=Number(el('settingWage').value),ww=Number(el('settingWeekendWage').value),pd=Number(el('settingPayDay').value),t=Number(el('settingTransport').value),n=Number(el('settingNight').value);
     if(!(w>0)){el('settingsStatus').textContent='時給は0円より大きくしてください';return;}
-    settings={wage:w,payDay:pd,transport:t,saturday:sat,sunday:sun,night:n};
+    settings={wage:w,weekendWage:ww,payDay:pd,transport:t,night:n};
     try{
       localStorage.setItem(settingsKey,JSON.stringify(settings));
       el('settingsStatus').textContent='設定を保存しました';
@@ -549,20 +563,64 @@
     selectDate(selected);
   });
 
+  ['start', 'end'].forEach(function(id){
+    el(id).addEventListener('change', function(){
+      var st = el('start').value, en = el('end').value;
+      if(st && en) {
+        el('break').value = calcAutoBreak(st, en);
+      }
+    });
+  });
+
+  function renderPresets() {
+    var container = el('shiftPresets');
+    if(!data.presets || data.presets.length === 0) {
+      container.innerHTML = '<div class="small">よく使うシフトパターンを保存すると、ここにボタンが表示されます。</div>';
+      return;
+    }
+    container.innerHTML = '<div class="small" style="margin-bottom:6px;">⚡ タップしてクイック入力：</div>' + 
+      data.presets.map(function(p, i){
+        return '<button type="button" class="preset-btn" data-preset-idx="'+i+'">'+esc(p.memo)+' ('+p.start+'〜'+p.end+')</button>';
+      }).join('') + '<br><button type="button" class="delete" id="clearPresets" style="font-size:10px; padding:2px 6px; margin-top:4px; width:auto;">パターンをリセット</button>';
+
+    container.querySelectorAll('[data-preset-idx]').forEach(function(btn){
+      btn.onclick = function(){
+        var p = data.presets[Number(this.getAttribute('data-preset-idx'))];
+        el('shiftMemo').value = p.memo;
+        el('start').value = p.start;
+        el('end').value = p.end;
+        el('break').value = p.breakMin;
+        el('nightBreak').value = p.nightBreak;
+        el('wage').value = p.wage;
+        el('transport').value = p.transport;
+      };
+    });
+
+    var clearBtn = el('clearPresets');
+    if(clearBtn) {
+      clearBtn.onclick = function(){
+        data.presets = [];
+        save();
+        renderPresets();
+      };
+    }
+  }
+
   function selectDate(s){
     selected=s;
     el('selectedLabel').textContent=s+' の詳細';
     var shift=data.shifts[s];
     
     var v=shift||{};
-    el('start').value=v.start||'09:00';
-    el('end').value=v.end||'17:00';
-    el('break').value=v.breakMin==null?60:v.breakMin;
-    el('nightBreak').value=v.nightBreak||0;
-    el('wage').value=v.wage==null?settings.wage:v.wage;
-    el('transport').value=v.transport==null?settings.transport:v.transport;
-    el('weekendBonus').value=v.weekendBonus==null?bonusFor(s):v.weekendBonus;
-    el('shiftMemo').value=v.memo||'';
+    var defaultSt = v.start || '09:00';
+    var defaultEn = v.end || '17:00';
+    el('start').value = defaultSt;
+    el('end').value = defaultEn;
+    el('break').value = v.breakMin == null ? calcAutoBreak(defaultSt, defaultEn) : v.breakMin;
+    el('nightBreak').value = v.nightBreak || 0;
+    el('wage').value = v.wage == null ? wageFor(s) : v.wage;
+    el('transport').value = v.transport == null ? settings.transport : v.transport;
+    el('shiftMemo').value = v.memo || '';
     el('shiftStatus').textContent='';
 
     var contentHtml='';
@@ -650,7 +708,7 @@
 
     var total=0;
     Object.keys(data.shifts).forEach(function(k){
-      if(k.slice(0,7)===y+'-'+String(m+1).padStart(2,'0')) total+=pay(data.shifts[k]);
+      if(k.slice(0,7)===y+'-'+String(m+1).padStart(2,'0')) total+=pay(data.shifts[k], k);
     });
     el('monthlyPay').textContent=yen(total);
   }
@@ -667,14 +725,23 @@
       nightBreak:Number(el('nightBreak').value),
       wage:Number(el('wage').value),
       transport:Number(el('transport').value),
-      weekendBonus:Number(el('weekendBonus').value),
       nightRate:settings.night,
-      memo:el('shiftMemo').value.trim()
+      memo:el('shiftMemo').value.trim() || 'コンビニ'
     };
     data.shifts[selected]=v;
+
+    var exists = data.presets.some(function(p){
+      return p.start === v.start && p.end === v.end && p.memo === v.memo;
+    });
+    if(!exists) {
+      data.presets.push(v);
+      if(data.presets.length > 4) data.presets.shift();
+    }
+
     save();
     renderAll();
-    el('shiftStatus').textContent='保存しました：見込み '+yen(pay(v));
+    renderPresets();
+    el('shiftStatus').textContent='保存しました：見込み '+yen(pay(v, selected));
   });
 
   el('removeShift').onclick=function(){
@@ -799,13 +866,13 @@
     renderCalendar();
     selectDate(selected);
     renderSubs();
+    renderPresets();
   }
 
   el('settingWage').value=settings.wage;
+  el('settingWeekendWage').value=settings.weekendWage||1300;
   el('settingPayDay').value=settings.payDay||25;
   el('settingTransport').value=settings.transport;
-  el('settingSaturday').value=settings.saturday;
-  el('settingSunday').value=settings.sunday;
   el('settingNight').value=settings.night;
 
   renderAll();
