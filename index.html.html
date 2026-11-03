@@ -70,6 +70,13 @@
     .budget-warning{color:#ef4444!important}
     .app-guide{background:#eff6ff;border:1px dashed #3b82f6;border-radius:12px;padding:12px;margin-top:20px;font-size:12px;color:#1e40af;line-height:1.5}
     
+    /* 税金シミュレーター案内カード用スタイル */
+    .tax-sim-box{background:#f0fdf4;border:1px solid #bbf7d0;border-radius:14px;padding:14px;margin-top:16px}
+    .tax-sim-box h3{margin:0 0 6px;font-size:15px;color:#166534;display:flex;align-items:center;gap:6px}
+    .tax-sim-box p{margin:0 0 10px;font-size:12px;color:#15803d;line-height:1.5}
+    .tax-sim-btn{display:block;background:#16a34a;color:white;text-align:center;text-decoration:none;padding:11px 16px;border-radius:9px;font-weight:bold;font-size:14px;transition:background 0.2s}
+    .tax-sim-btn:active{background:#15803d}
+
     .year-view-modal{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:99999;padding:20px;overflow-y:auto}
     .year-view-content{background:white;border-radius:16px;max-width:650px;margin:20px auto;padding:20px}
   </style>
@@ -111,6 +118,15 @@
       <div style="margin-top:15px; border-top:1px solid #eee; padding-top:10px;">
         <div class="small">今月あと使える予算</div>
         <div class="metric" id="remainingBudget">¥0</div>
+      </div>
+
+      <!-- 税金・手取り計算シミュレーター案内枠 -->
+      <div class="tax-sim-box">
+        <h3>💡 税金＆手取り計算シミュレーター</h3>
+        <p>「年収が〇〇円のとき、税金で何円引かれて手元にいくら残る？」がひと目で計算できる専用ツールです。</p>
+        <a href="https://student-income-simulator.vercel.app/" target="_blank" rel="noopener noreferrer" class="tax-sim-btn">
+          税金・手取り計算サイトを開く ↗
+        </a>
       </div>
     </div>
 
@@ -358,7 +374,6 @@
 
   var view=new Date(), expView=new Date(), selected=today();
 
-  // 設定画面の「戻る ＞」ボタンで閉じる処理
   el('closeShiftSettings').onclick = function(){
     el('shiftSettings').removeAttribute('open');
   };
@@ -389,7 +404,6 @@
     return Math.round(worked/60*v.wage + night/60*v.wage*(v.nightRate==null?.25:v.nightRate/100) + (Number(v.transport)||0) + (Number(v.weekendBonus)||0));
   }
 
-  // 給料日の口座反映計算（給料日を過ぎたら前月までの給料を口座にプラス）
   function getReflectedBalance() {
     var baseBal = Number(data.balance) || 0;
     var now = new Date();
@@ -398,15 +412,12 @@
     var curD = now.getDate();
     var payDay = Number(settings.payDay) || 25;
 
-    // 今月の給料日を過ぎているか判定
     var targetY = curY, targetM = curM;
     if(curD < payDay) {
-      // まだ今月の給料日に達していなければ、直近で支給されるのは先月分の給料
       targetM -= 1;
       if(targetM < 0) { targetM = 11; targetY -= 1; }
     }
 
-    // 対象月（targetY, targetM）までの未反映の給料を合計してプラスする
     var totalShiftPay = 0;
     Object.keys(data.shifts).forEach(function(k){
       var parts = k.split('-');
@@ -579,7 +590,6 @@
     var dayShiftAddBtn = el('dayShiftAddBtn');
     if(dayShiftAddBtn) {
       dayShiftAddBtn.onclick = function(){
-        // 下の入力欄へスクロール＆フォーカス
         el('shiftInputCard').scrollIntoView({behavior: 'smooth'});
       };
     }
