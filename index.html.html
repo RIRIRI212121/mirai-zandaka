@@ -41,8 +41,7 @@
     
     .bar-chart{display:flex;align-items:flex-end;justify-content:space-between;height:150px;padding:20px 5px 10px;border-bottom:2px solid #cbd5e1;gap:4px}
     .bar-col{flex:1;display:flex;flex-direction:column;align-items:center;height:100%;justify-content:flex-end}
-    .bar-fill{width:100%;max-width:18px;background:#6154d8;border-radius:4px 4px 0 0;min-height:2px;transition:height 0.3s}
-    .bar-fill.minus{background:#ef4444}
+    .bar-fill{width:100%;max-width:18px;background:#16a58a;border-radius:4px 4px 0 0;min-height:2px;transition:height 0.3s}
     .bar-label{font-size:10px;color:#69758a;margin-top:6px}
 
     /* カレンダーデザイン（日曜始まり） */
@@ -205,7 +204,6 @@
             <button type="button" id="saveShiftSettings" class="settings-save">設定を保存</button>
             <button type="button" class="secondary" id="closeShiftSettings" style="width:100%; margin-top:8px;">戻る ＞</button>
 
-            <!-- バックアップ・データ管理用 -->
             <hr style="margin:16px 0; border:0; border-top:1px solid #dce0f5;">
             <div class="small" style="margin-bottom:6px;">データ管理（バックアップ）</div>
             <button type="button" class="secondary" id="exportDataBtn" style="font-size:13px; padding:8px; margin-top:0;">データをファイルに保存</button>
@@ -232,6 +230,9 @@
 
       <div class="metric" id="monthlyPay" style="margin-top:20px;">¥0</div>
       <div class="small">当月の給与見込み（交通費込み・額面）</div>
+      
+      <!-- 年間収入・月別グラフ確認ボタン -->
+      <button type="button" class="secondary" id="openYearIncomeView" style="margin-top:12px; font-size:13px; width:100%;">📈 年間の収入推移・壁を確認する</button>
     </div>
 
     <div class="card" id="shiftInputCard">
@@ -334,15 +335,35 @@
   </div>
 </div>
 
+<!-- 年間バイト収入・月別グラフ用モーダル画面 -->
+<div class="year-view-modal" id="yearIncomeModal">
+  <div class="year-view-content">
+    <div class="row" style="margin-bottom:15px;">
+      <h2 style="margin:0;" id="yearIncomeTitle">2026年の年間バイト収入</h2>
+      <button type="button" class="secondary" id="closeYearIncomeView" style="padding:6px 12px; font-size:13px;">✕ 閉じる</button>
+    </div>
+
+    <div class="card" style="margin-top:0;">
+      <div class="small">今年の年間バイト総収入（見込み含む）</div>
+      <div class="metric" id="totalYearlyShiftIncome" style="color:#16a58a;">¥0</div>
+      <p class="small" style="margin-top:8px; color:#475569;">※103万円・130万円などの壁（税金・扶養控除）の目安としてご活用ください。</p>
+    </div>
+
+    <div class="card">
+      <h2>月別バイト収入の推移</h2>
+      <p class="small">月ごとのアルバイト収入額を棒グラフで表示</p>
+      <div class="bar-chart" id="yearIncomeBarChart"></div>
+    </div>
+  </div>
+</div>
+
 <script>
 (function(){
   'use strict';
   
-  // 今後コードを更新しても消えないマスターキー
   var masterKey = 'mirai-iphone-master-data';
   var settingsMasterKey = 'mirai-shift-settings-master';
 
-  // 1. 過去のバージョン（v1〜v4）のデータが残っていれば、自動でマスターデータに引っ越し（引き継ぎ）する
   var oldKeys = ['mirai-iphone-anchor-v4', 'mirai-iphone-anchor-v3', 'mirai-iphone-anchor-v2', 'mirai-iphone-anchor-v1'];
   if(!localStorage.getItem(masterKey)) {
     for(var i = 0; i < oldKeys.length; i++) {
@@ -425,7 +446,6 @@
     }
   });
 
-  // バックアップのエクスポート（ファイルに保存）
   el('exportDataBtn').onclick = function(){
     var dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify({data: data, settings: settings}));
     var downloadAnchor = document.createElement('a');
@@ -436,7 +456,6 @@
     downloadAnchor.remove();
   };
 
-  // バックアップのインポート（ファイルから復元）
   el('importDataBtn').onclick = function(){
     el('importFile').click();
   };
@@ -946,7 +965,7 @@
   });
 
   function renderYearView() {
-    var currentYear = expView.getFullYear();
+    var currentYear = view.getFullYear();
     el('yearLabel').textContent = currentYear + '年の収支レポート';
 
     var totalInc = 0, totalExp = 0;
@@ -1014,12 +1033,59 @@
     }).join('');
   }
 
+  // 年間バイト収入レポートのレンダリング
+  function renderYearIncomeView() {
+    var currentYear = view.getFullYear();
+    el('yearIncomeTitle').textContent = currentYear + '年の年間バイト収入';
+
+    var totalYearIncome = 0;
+    var monthlyIncomeMap = {};
+
+    for(var m = 1; m <= 12; m++) {
+      monthlyIncomeMap[m] = 0;
+    }
+
+    Object.keys(data.shifts).forEach(function(k){
+      if(k.slice(0, 4) === String(currentYear)) {
+        var mNum = Number(k.split('-')[1]);
+        var pVal = pay(data.shifts[k], k);
+        monthlyIncomeMap[mNum] = (monthlyIncomeMap[mNum] || 0) + pVal;
+        totalYearIncome += pVal;
+      }
+    });
+
+    el('totalYearlyShiftIncome').textContent = yen(totalYearIncome);
+
+    var maxVal = Math.max.apply(null, Object.values(monthlyIncomeMap));
+    if(maxVal === 0) maxVal = 1;
+
+    var barHtml = '';
+    for(var m = 1; m <= 12; m++) {
+      var val = monthlyIncomeMap[m];
+      var heightPercent = Math.round((val / maxVal) * 100);
+
+      barHtml += '<div class="bar-col">';
+      barHtml += '<div class="bar-fill" style="height:' + Math.max(heightPercent, 2) + '%; background:#16a58a;" title="' + m + '月: ' + yen(val) + '"></div>';
+      barHtml += '<div class="bar-label">' + m + '月</div>';
+      barHtml += '</div>';
+    }
+    el('yearIncomeBarChart').innerHTML = barHtml;
+  }
+
   el('openYearView').onclick = function(){
     renderYearView();
     el('yearViewModal').style.display = 'block';
   };
   el('closeYearView').onclick = function(){
     el('yearViewModal').style.display = 'none';
+  };
+
+  el('openYearIncomeView').onclick = function(){
+    renderYearIncomeView();
+    el('yearIncomeModal').style.display = 'block';
+  };
+  el('closeYearIncomeView').onclick = function(){
+    el('yearIncomeModal').style.display = 'none';
   };
 
   function renderAll(){
