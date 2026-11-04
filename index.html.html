@@ -1,8 +1,6 @@
 <!doctype html>
 <html lang="ja">
 <head>
-
-  
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <title>みらい残高・完全版</title>
@@ -206,6 +204,14 @@
             <label>深夜割増率（％）</label><input id="settingNight" type="number" min="0" max="200" step="1" value="25">
             <button type="button" id="saveShiftSettings" class="settings-save">設定を保存</button>
             <button type="button" class="secondary" id="closeShiftSettings" style="width:100%; margin-top:8px;">戻る ＞</button>
+
+            <!-- バックアップ・データ管理用 -->
+            <hr style="margin:16px 0; border:0; border-top:1px solid #dce0f5;">
+            <div class="small" style="margin-bottom:6px;">データ管理（バックアップ）</div>
+            <button type="button" class="secondary" id="exportDataBtn" style="font-size:13px; padding:8px; margin-top:0;">データをファイルに保存</button>
+            <input type="file" id="importFile" accept=".json" style="display:none">
+            <button type="button" class="secondary" id="importDataBtn" style="font-size:13px; padding:8px; margin-top:6px;">保存したデータを復元</button>
+
             <div id="settingsStatus" class="status"></div>
           </div>
         </details>
@@ -260,13 +266,11 @@
           <option value="yearly">毎年（年払い）</option>
         </select>
 
-        <!-- 月払い用の入力項目 -->
         <div id="monthlySubFields">
           <label>月額料金（円）</label><input id="subAmount" type="number" min="1" placeholder="例：980">
           <label>引き落とし日（毎月の日付）</label><input id="subDay" type="number" min="1" max="31" value="1">
         </div>
 
-        <!-- 年払い用の入力項目（初期非表示） -->
         <div id="yearlySubFields" style="display:none;">
           <label>年額料金（円）</label><input id="subYearlyAmount" type="number" min="1" placeholder="例：11800">
           <label>請求月</label>
@@ -333,18 +337,43 @@
 <script>
 (function(){
   'use strict';
-  var key='mirai-iphone-anchor-v4';
-  var settingsKey='mirai-shift-settings-v4';
-  var settings={wage:1200,weekendWage:1300,payDay:25,transport:0,night:25};
   
+  // 今後コードを更新しても消えないマスターキー
+  var masterKey = 'mirai-iphone-master-data';
+  var settingsMasterKey = 'mirai-shift-settings-master';
+
+  // 1. 過去のバージョン（v1〜v4）のデータが残っていれば、自動でマスターデータに引っ越し（引き継ぎ）する
+  var oldKeys = ['mirai-iphone-anchor-v4', 'mirai-iphone-anchor-v3', 'mirai-iphone-anchor-v2', 'mirai-iphone-anchor-v1'];
+  if(!localStorage.getItem(masterKey)) {
+    for(var i = 0; i < oldKeys.length; i++) {
+      var oldData = localStorage.getItem(oldKeys[i]);
+      if(oldData) {
+        localStorage.setItem(masterKey, oldData);
+        break;
+      }
+    }
+  }
+
+  var settingsKeyOlds = ['mirai-shift-settings-v4', 'mirai-shift-settings-v3', 'mirai-shift-settings-v2', 'mirai-shift-settings-v1'];
+  if(!localStorage.getItem(settingsMasterKey)) {
+    for(var j = 0; j < settingsKeyOlds.length; j++) {
+      var oldSet = localStorage.getItem(settingsKeyOlds[j]);
+      if(oldSet) {
+        localStorage.setItem(settingsMasterKey, oldSet);
+        break;
+      }
+    }
+  }
+
+  var settings={wage:1200,weekendWage:1300,payDay:25,transport:0,night:25};
   try{
-    var storedSettings=JSON.parse(localStorage.getItem(settingsKey));
+    var storedSettings=JSON.parse(localStorage.getItem(settingsMasterKey));
     if(storedSettings) settings=Object.assign(settings,storedSettings);
   }catch(e){}
 
   var data={expenses:[],shifts:{},subs:[],presets:[],balance:0,monthlyBudget:50000};
   try{
-    var saved=JSON.parse(localStorage.getItem(key));
+    var saved=JSON.parse(localStorage.getItem(masterKey));
     if(saved&&typeof saved==='object') data=Object.assign(data,saved);
     if(!Array.isArray(data.expenses)) data.expenses=[];
     if(!Array.isArray(data.subs)) data.subs=[];
@@ -354,7 +383,7 @@
 
   function save(){
     try{
-      localStorage.setItem(key,JSON.stringify(data));
+      localStorage.setItem(masterKey,JSON.stringify(data));
       return true;
     }catch(e){
       alert('保存できませんでした。');
@@ -386,7 +415,6 @@
     renderAll();
   });
 
-  // サブスク周期切り替えによる入力項目の表示切り替え
   el('subCycle').addEventListener('change', function(){
     if(this.value === 'yearly') {
       el('monthlySubFields').style.display = 'none';
@@ -397,14 +425,46 @@
     }
   });
 
+  // バックアップのエクスポート（ファイルに保存）
+  el('exportDataBtn').onclick = function(){
+    var dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify({data: data, settings: settings}));
+    var downloadAnchor = document.createElement('a');
+    downloadAnchor.setAttribute("href", dataStr);
+    downloadAnchor.setAttribute("download", "mirai_zandaka_backup.json");
+    document.body.appendChild(downloadAnchor);
+    downloadAnchor.click();
+    downloadAnchor.remove();
+  };
+
+  // バックアップのインポート（ファイルから復元）
+  el('importDataBtn').onclick = function(){
+    el('importFile').click();
+  };
+  el('importFile').addEventListener('change', function(e){
+    var file = e.target.files[0];
+    if(!file) return;
+    var reader = new FileReader();
+    reader.onload = function(evt){
+      try{
+        var parsed = JSON.parse(evt.target.result);
+        if(parsed.data) data = parsed.data;
+        if(parsed.settings) settings = parsed.settings;
+        save();
+        localStorage.setItem(settingsMasterKey, JSON.stringify(settings));
+        alert('データを正常に復元しました！');
+        location.reload();
+      }catch(err){
+        alert('ファイルの読み込みに失敗しました。');
+      }
+    };
+    reader.readAsText(file);
+  });
+
   var colors=['#6154d8','#16a58a','#ef8e4a','#e45d7a','#4b9be5','#e1b44a','#8e7caa','#64748b'];
 
-  // 日本の祝日判定関数（主要な固定祝日＋ハッピーマンデー等簡易計算）
   function isJapaneseHoliday(year, month, day) {
     var d = new Date(year, month, day);
     var w = d.getDay();
-    
-    // 固定祝日
     var fixed = {
       '1-1': '元日', '2-11': '建国記念の日', '2-23': '天皇誕生日',
       '4-29': '昭和の日', '5-3': '憲法記念日', '5-4': 'みどりの日', '5-5': 'こどもの日',
@@ -412,21 +472,16 @@
     };
     if(fixed[(month+1)+'-'+day]) return true;
 
-    // 成人の日 (1月第2月曜)
     if(month === 0 && w === 1 && day >= 8 && day <= 14) return true;
-    // 海の日 (7月第3月曜)
     if(month === 6 && w === 1 && day >= 15 && day <= 21) return true;
-    // 敬老の日 (9月第3月曜)
     if(month === 8 && w === 1 && day >= 15 && day <= 21) return true;
-    // スポーツの日 (10月第2月曜)
     if(month === 9 && w === 1 && day >= 8 && day <= 14) return true;
 
-    // 春分の日・秋分日の簡易計算
-    if(month === 2) { // 3月
+    if(month === 2) {
       var vernal = Math.floor(20.8431 + 0.242194 * (year - 1980)) - Math.floor((year - 1980) / 4);
       if(day === vernal) return true;
     }
-    if(month === 8) { // 9月
+    if(month === 8) {
       var autumn = Math.floor(23.2488 + 0.242194 * (year - 1980)) - Math.floor((year - 1980) / 4);
       if(day === autumn) return true;
     }
@@ -439,12 +494,11 @@
     data.expenses.forEach(function(e){ list.push(e); });
     
     data.subs.forEach(function(s){
-      // 登録日以降かチェック
       if(s.createdDate) {
         var cParts = s.createdDate.split('-').map(Number);
         var cYear = cParts[0], cMonth = cParts[1] - 1;
         if(year < cYear || (year === cYear && month < cMonth)) {
-          return; // 登録月より前ならスキップ
+          return;
         }
       }
 
@@ -493,7 +547,6 @@
     return 0;
   }
 
-  // 曜日・祝日判定（土日または祝日なら土日祝時給）
   function wageFor(dateStr) {
     var parts = dateStr.split('-').map(Number);
     var d = new Date(parts[0], parts[1] - 1, parts[2]);
@@ -517,7 +570,6 @@
     night=Math.max(0,night-Math.max(0,Number(v.nightBreak)||0));
     night=Math.min(night,worked);
 
-    // 適用日はその日の曜日・祝日に応じた時給にする
     var currentWage = wageFor(dateStr);
     return Math.round(worked/60*currentWage + night/60*currentWage*(v.nightRate==null?.25:v.nightRate/100) + (Number(v.transport)||0));
   }
@@ -647,7 +699,7 @@
     if(!(w>0)){el('settingsStatus').textContent='時給は0円より大きくしてください';return;}
     settings={wage:w,weekendWage:ww,payDay:pd,transport:t,night:n};
     try{
-      localStorage.setItem(settingsKey,JSON.stringify(settings));
+      localStorage.setItem(settingsMasterKey,JSON.stringify(settings));
       el('settingsStatus').textContent='設定を保存しました';
     }catch(e){el('settingsStatus').textContent='保存エラー';}
     selectDate(selected);
@@ -989,4 +1041,3 @@
 </script>
 </body>
 </html>
-
