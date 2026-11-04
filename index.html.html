@@ -45,11 +45,15 @@
     .bar-fill.minus{background:#ef4444}
     .bar-label{font-size:10px;color:#69758a;margin-top:6px}
 
+    /* カレンダーデザイン（日曜始まり） */
     .calendar{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}
     .day{padding:6px 2px;text-align:center;background:#fff;color:#24314a;border:1px solid #e2e8f0;border-radius:8px;min-height:60px;font-size:13px;margin:0;display:flex;flex-direction:column;align-items:center;justify-content:space-between;cursor:pointer}
     .day:hover{background:#f8fafc}
     .day.selected{border:2px solid #6154d8;background:#f5f3ff}
     .cal-day-num{font-weight:600}
+    .cal-day-num.sun{color:#ef4444}
+    .cal-day-num.sat{color:#2563eb}
+    .cal-day-num.holiday{color:#ef4444 !important;}
     .cal-dots{display:flex;gap:3px;height:6px;align-items:center;justify-content:center}
     .dot{width:5px;height:5px;border-radius:50%}
     .dot-shift{background:#16a58a}
@@ -85,7 +89,9 @@
     .tax-sim-btn{display:block;background:#16a34a;color:white;text-align:center;text-decoration:none;padding:11px 16px;border-radius:9px;font-weight:bold;font-size:14px;transition:background 0.2s}
     .tax-sim-btn:active{background:#15803d}
 
-    .preset-btn{background:#eef0fa;color:#433c91;border:1px solid #dce0f5;padding:8px 12px;border-radius:8px;font-size:13px;font-weight:bold;cursor:pointer;margin-right:6px;margin-bottom:6px}
+    .preset-badge{display:inline-flex;align-items:center;background:#eef0fa;color:#433c91;border:1px solid #dce0f5;padding:6px 10px;border-radius:8px;font-size:13px;font-weight:bold;margin-right:6px;margin-bottom:6px;gap:6px}
+    .preset-badge span{cursor:pointer}
+    .preset-del{background:#fff0f0;color:#b62e42;border:0;border-radius:50%;width:18px;height:18px;font-size:10px;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;padding:0}
     .preset-container{margin-bottom:10px}
 
     .year-view-modal{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:99999;padding:20px;overflow-y:auto}
@@ -225,14 +231,14 @@
       <div id="shiftPresets" class="preset-container"></div>
 
       <form id="shiftForm" onsubmit="return false">
-        <label>勤務先（メモなど）</label><input id="shiftMemo" type="text" placeholder="例：セブンイレブン">
+        <label>勤務先（メモなど）</label><input id="shiftMemo" type="text" placeholder="例：コンビニ">
         <label>開始時刻</label><input id="start" type="time" value="09:00" required>
         <label>終了時刻</label><input id="end" type="time" value="17:00" required>
         <label>休憩時間（分）※労働時間に応じて自動計算されます</label><input id="break" type="number" min="0" value="60" required>
         <label>深夜帯の休憩（分）</label><input id="nightBreak" type="number" min="0" value="0" required>
         <label>時給（円）※曜日で自動切り替わります</label><input id="wage" type="number" min="1" placeholder="1200" required>
         <label>交通費（円）</label><input id="transport" type="number" min="0" value="0" required>
-        <button type="button" data-save="1">シフトを保存してパターン追加</button>
+        <button type="button" data-save="1">シフトを保存してクイック追加</button>
         <button class="secondary delete" type="button" id="removeShift" style="width:100%; margin-top:8px;">この日のシフトを削除</button>
         <div class="status" id="shiftStatus"></div>
       </form>
@@ -245,15 +251,34 @@
       <h2>サブスク管理</h2>
       <form id="subForm" onsubmit="return false">
         <label>サブスクの名称</label><input id="subName" type="text" required placeholder="例：Spotify">
-        <label>金額（円）</label><input id="subAmount" type="number" min="1" required>
-        <label>請求周期</label><select id="subCycle"><option value="monthly">毎月</option><option value="yearly">毎年</option></select>
-        <label>引き落とし日（毎月の日付）</label><input id="subDay" type="number" min="1" max="31" value="1">
-        <label>年払いの請求月</label>
-        <select id="subMonth">
-          <option value="1">1月</option><option value="2">2月</option><option value="3">3月</option><option value="4">4月</option>
-          <option value="5">5月</option><option value="6">6月</option><option value="7">7月</option><option value="8">8月</option>
-          <option value="9">9月</option><option value="10">10月</option><option value="11">11月</option><option value="12">12月</option>
+        
+        <label>請求周期</label>
+        <select id="subCycle">
+          <option value="monthly">毎月（月払い）</option>
+          <option value="yearly">毎年（年払い）</option>
         </select>
+
+        <!-- 月払い用の入力項目 -->
+        <div id="monthlySubFields">
+          <label>月額料金（円）</label><input id="subAmount" type="number" min="1" placeholder="例：980">
+          <label>引き落とし日（毎月の日付）</label><input id="subDay" type="number" min="1" max="31" value="1">
+        </div>
+
+        <!-- 年払い用の入力項目（初期非表示） -->
+        <div id="yearlySubFields" style="display:none;">
+          <label>年額料金（円）</label><input id="subYearlyAmount" type="number" min="1" placeholder="例：11800">
+          <label>請求月</label>
+          <select id="subMonth">
+            <option value="1">1月</option><option value="2">2月</option><option value="3">3月</option><option value="4">4月</option>
+            <option value="5">5月</option><option value="6">6月</option><option value="7">7月</option><option value="8">8月</option>
+            <option value="9">9月</option><option value="10">10月</option><option value="11">11月</option><option value="12">12月</option>
+          </select>
+          <label>請求日（日）</label><input id="subYearlyDay" type="number" min="1" max="31" value="1">
+        </div>
+
+        <label>登録日（この月以降から反映されます）</label>
+        <input id="subCreatedDate" type="date" required>
+
         <button type="button" data-save="1">サブスクを保存</button>
         <div class="status" id="subStatus"></div>
       </form>
@@ -306,8 +331,8 @@
 <script>
 (function(){
   'use strict';
-  var key='mirai-iphone-anchor-v3';
-  var settingsKey='mirai-shift-settings-v3';
+  var key='mirai-iphone-anchor-v4';
+  var settingsKey='mirai-shift-settings-v4';
   var settings={wage:1200,weekendWage:1300,payDay:25,transport:0,night:25};
   
   try{
@@ -344,6 +369,7 @@
   }
 
   el('date').value=today();
+  el('subCreatedDate').value=today();
   el('balance').value=data.balance||'';
   el('monthlyBudget').value=data.monthlyBudget||'';
   
@@ -358,25 +384,82 @@
     renderAll();
   });
 
+  // サブスク周期切り替えによる入力項目の表示切り替え
+  el('subCycle').addEventListener('change', function(){
+    if(this.value === 'yearly') {
+      el('monthlySubFields').style.display = 'none';
+      el('yearlySubFields').style.display = 'block';
+    } else {
+      el('monthlySubFields').style.display = 'block';
+      el('yearlySubFields').style.display = 'none';
+    }
+  });
+
   var colors=['#6154d8','#16a58a','#ef8e4a','#e45d7a','#4b9be5','#e1b44a','#8e7caa','#64748b'];
+
+  // 日本の祝日判定関数（主要な固定祝日＋ハッピーマンデー等簡易計算）
+  function isJapaneseHoliday(year, month, day) {
+    var d = new Date(year, month, day);
+    var w = d.getDay();
+    
+    // 固定祝日
+    var fixed = {
+      '1-1': '元日', '2-11': '建国記念の日', '2-23': '天皇誕生日',
+      '4-29': '昭和の日', '5-3': '憲法記念日', '5-4': 'みどりの日', '5-5': 'こどもの日',
+      '8-11': '山の日', '11-3': '文化の日', '11-23': '勤労感謝の日'
+    };
+    if(fixed[(month+1)+'-'+day]) return true;
+
+    // 成人の日 (1月第2月曜)
+    if(month === 0 && w === 1 && day >= 8 && day <= 14) return true;
+    // 海の日 (7月第3月曜)
+    if(month === 6 && w === 1 && day >= 15 && day <= 21) return true;
+    // 敬老の日 (9月第3月曜)
+    if(month === 8 && w === 1 && day >= 15 && day <= 21) return true;
+    // スポーツの日 (10月第2月曜)
+    if(month === 9 && w === 1 && day >= 8 && day <= 14) return true;
+
+    // 春分の日・秋分日の簡易計算
+    if(month === 2) { // 3月
+      var vernal = Math.floor(20.8431 + 0.242194 * (year - 1980)) - Math.floor((year - 1980) / 4);
+      if(day === vernal) return true;
+    }
+    if(month === 8) { // 9月
+      var autumn = Math.floor(23.2488 + 0.242194 * (year - 1980)) - Math.floor((year - 1980) / 4);
+      if(day === autumn) return true;
+    }
+
+    return false;
+  }
 
   function getCombinedExpenses(year, month) {
     var list = [];
     data.expenses.forEach(function(e){ list.push(e); });
     
     data.subs.forEach(function(s){
-      var day = s.day || 1;
-      var lastD = new Date(year, month + 1, 0).getDate();
-      var actualDay = Math.min(day, lastD);
-      var mm = String(month + 1).padStart(2, '0');
-      var dd = String(actualDay).padStart(2, '0');
-      var subDate = year + '-' + mm + '-' + dd;
+      // 登録日以降かチェック
+      if(s.createdDate) {
+        var cParts = s.createdDate.split('-').map(Number);
+        var cYear = cParts[0], cMonth = cParts[1] - 1;
+        if(year < cYear || (year === cYear && month < cMonth)) {
+          return; // 登録月より前ならスキップ
+        }
+      }
 
       if(s.cycle === 'yearly') {
         if(Number(s.month) === (month + 1)) {
+          var lastD = new Date(year, month + 1, 0).getDate();
+          var actualDay = Math.min(s.day || 1, lastD);
+          var subDate = year + '-' + String(month + 1).padStart(2, '0') + '-' + String(actualDay).padStart(2, '0');
           list.push({amount: s.amount, category: 'サブスク', memo: s.name + ' (年払い)', date: subDate, type: 'expense', isSub: true});
         }
       } else {
+        var day = s.day || 1;
+        var lastD = new Date(year, month + 1, 0).getDate();
+        var actualDay = Math.min(day, lastD);
+        var mm = String(month + 1).padStart(2, '0');
+        var dd = String(actualDay).padStart(2, '0');
+        var subDate = year + '-' + mm + '-' + dd;
         list.push({amount: s.amount, category: 'サブスク', memo: s.name, date: subDate, type: 'expense', isSub: true});
       }
     });
@@ -408,9 +491,13 @@
     return 0;
   }
 
+  // 曜日・祝日判定（土日または祝日なら土日祝時給）
   function wageFor(dateStr) {
-    var day = new Date(dateStr + 'T12:00:00').getDay();
-    return (day === 0 || day === 6) ? (Number(settings.weekendWage) || 1300) : (Number(settings.wage) || 1200);
+    var parts = dateStr.split('-').map(Number);
+    var d = new Date(parts[0], parts[1] - 1, parts[2]);
+    var day = d.getDay();
+    var isHol = isJapaneseHoliday(parts[0], parts[1] - 1, parts[2]);
+    return (day === 0 || day === 6 || isHol) ? (Number(settings.weekendWage) || 1300) : (Number(settings.wage) || 1200);
   }
 
   function pay(v, dateStr){
@@ -428,7 +515,8 @@
     night=Math.max(0,night-Math.max(0,Number(v.nightBreak)||0));
     night=Math.min(night,worked);
 
-    var currentWage = v.wage != null ? Number(v.wage) : wageFor(dateStr);
+    // 適用日はその日の曜日・祝日に応じた時給にする
+    var currentWage = wageFor(dateStr);
     return Math.round(worked/60*currentWage + night/60*currentWage*(v.nightRate==null?.25:v.nightRate/100) + (Number(v.transport)||0));
   }
 
@@ -580,30 +668,30 @@
     }
     container.innerHTML = '<div class="small" style="margin-bottom:6px;">⚡ タップしてクイック入力：</div>' + 
       data.presets.map(function(p, i){
-        return '<button type="button" class="preset-btn" data-preset-idx="'+i+'">'+esc(p.memo)+' ('+p.start+'〜'+p.end+')</button>';
-      }).join('') + '<br><button type="button" class="delete" id="clearPresets" style="font-size:10px; padding:2px 6px; margin-top:4px; width:auto;">パターンをリセット</button>';
+        return '<div class="preset-badge"><span data-preset-idx="'+i+'">'+esc(p.memo)+' ('+p.start+'〜'+p.end+')</span><button type="button" class="preset-del" data-del-idx="'+i+'">×</button></div>';
+      }).join('');
 
-    container.querySelectorAll('[data-preset-idx]').forEach(function(btn){
-      btn.onclick = function(){
+    container.querySelectorAll('[data-preset-idx]').forEach(function(span){
+      span.onclick = function(){
         var p = data.presets[Number(this.getAttribute('data-preset-idx'))];
         el('shiftMemo').value = p.memo;
         el('start').value = p.start;
         el('end').value = p.end;
         el('break').value = p.breakMin;
         el('nightBreak').value = p.nightBreak;
-        el('wage').value = p.wage;
         el('transport').value = p.transport;
       };
     });
 
-    var clearBtn = el('clearPresets');
-    if(clearBtn) {
-      clearBtn.onclick = function(){
-        data.presets = [];
+    container.querySelectorAll('[data-del-idx]').forEach(function(btn){
+      btn.onclick = function(e){
+        e.stopPropagation();
+        var idx = Number(this.getAttribute('data-del-idx'));
+        data.presets.splice(idx, 1);
         save();
         renderPresets();
       };
-    }
+    });
   }
 
   function selectDate(s){
@@ -618,7 +706,6 @@
     el('end').value = defaultEn;
     el('break').value = v.breakMin == null ? calcAutoBreak(defaultSt, defaultEn) : v.breakMin;
     el('nightBreak').value = v.nightBreak || 0;
-    el('wage').value = v.wage == null ? wageFor(s) : v.wage;
     el('transport').value = v.transport == null ? settings.transport : v.transport;
     el('shiftMemo').value = v.memo || '';
     el('shiftStatus').textContent='';
@@ -675,8 +762,9 @@
     });
 
     var html='';
-    ['日','月','火','水','木','金','土'].forEach(function(w){
-      html+='<span class="small" style="text-align:center; font-weight:bold;">'+w+'</span>';
+    ['日','月','火','水','木','金','土'].forEach(function(w, idx){
+      var colColor = idx === 0 ? 'color:#ef4444;' : (idx === 6 ? 'color:#2563eb;' : '');
+      html+='<span class="small" style="text-align:center; font-weight:bold; '+colColor+'">'+w+'</span>';
     });
     for(var i=0; i<first; i++) html+='<span></span>';
 
@@ -687,8 +775,16 @@
       var hasExpense=!!expenseMap[date];
       var hasIncome=!!incomeMap[date];
 
+      var dObj = new Date(y, m, d);
+      var wIdx = dObj.getDay();
+      var isHol = isJapaneseHoliday(y, m, d);
+
+      var numClass = 'cal-day-num';
+      if(isHol || wIdx === 0) numClass += ' holiday';
+      else if(wIdx === 6) numClass += ' sat';
+
       html+='<button type="button" class="day'+(isSelected?' selected':'')+'" data-date="'+date+'">';
-      html+='<span class="cal-day-num">'+d+'</span>';
+      html+='<span class="'+numClass+'">'+d+'</span>';
       
       html+='<span class="cal-dots">';
       if(hasShift) html+='<span class="dot dot-shift"></span>';
@@ -723,7 +819,6 @@
       end:el('end').value,
       breakMin:Number(el('break').value),
       nightBreak:Number(el('nightBreak').value),
-      wage:Number(el('wage').value),
       transport:Number(el('transport').value),
       nightRate:settings.night,
       memo:el('shiftMemo').value.trim() || 'コンビニ'
@@ -735,7 +830,7 @@
     });
     if(!exists) {
       data.presets.push(v);
-      if(data.presets.length > 4) data.presets.shift();
+      if(data.presets.length > 5) data.presets.shift();
     }
 
     save();
@@ -753,8 +848,10 @@
   function renderSubs(){
     var total=0;
     el('subList').innerHTML=data.subs.map(function(s,i){
-      total+=s.cycle==='yearly'?s.amount/12:s.amount;
-      return '<div class="line subitem" style="--accent:'+colors[i%colors.length]+'"><span><b>'+esc(s.name)+'</b><br><span class="small">'+(s.cycle==='yearly'?'毎年'+s.month+'月':'毎月')+s.day+'日</span></span><span><b>'+yen(s.amount)+'</b><br><button type="button" class="delete" data-sub-index="'+i+'">削除</button></span></div>';
+      var monthlyVal = s.cycle === 'yearly' ? s.amount / 12 : s.amount;
+      total += monthlyVal;
+      var cycleText = s.cycle === 'yearly' ? ('毎年'+s.month+'月'+s.day+'日 (年払)') : ('毎月'+s.day+'日');
+      return '<div class="line subitem" style="--accent:'+colors[i%colors.length]+'"><span><b>'+esc(s.name)+'</b><br><span class="small">'+cycleText+' / 登録:'+esc(s.createdDate||'-')+'</span></span><span><b>'+yen(s.amount)+(s.cycle==='yearly'?'/年':'/月')+'</b><br><button type="button" class="delete" data-sub-index="'+i+'">削除</button></span></div>';
     }).join('');
     el('subTotal').textContent=yen(total);
     el('subList').querySelectorAll('[data-sub-index]').forEach(function(b){
@@ -768,20 +865,30 @@
 
   el('subForm').querySelector('[data-save]').addEventListener('click',function(e){
     e.preventDefault();
-    var s={
-      name:el('subName').value.trim(),
-      amount:Number(el('subAmount').value),
-      cycle:el('subCycle').value,
-      day:Number(el('subDay').value),
-      month:Number(el('subMonth').value)
+    var name = el('subName').value.trim();
+    var cycle = el('subCycle').value;
+    var createdDate = el('subCreatedDate').value;
+    if(!name || !createdDate) return;
+
+    var amount = cycle === 'yearly' ? Number(el('subYearlyAmount').value) : Number(el('subAmount').value);
+    if(!(amount > 0)) return;
+
+    var s = {
+      name: name,
+      amount: amount,
+      cycle: cycle,
+      day: cycle === 'yearly' ? Number(el('subYearlyDay').value) : Number(el('subDay').value),
+      month: cycle === 'yearly' ? Number(el('subMonth').value) : 1,
+      createdDate: createdDate
     };
-    if(!s.name||!(s.amount>0)) return;
+
     data.subs.push(s);
     save();
     renderAll();
     el('subStatus').textContent='保存しました：'+s.name;
     el('subName').value='';
     el('subAmount').value='';
+    el('subYearlyAmount').value='';
   });
 
   function renderYearView() {
@@ -880,3 +987,4 @@
 </script>
 </body>
 </html>
+
