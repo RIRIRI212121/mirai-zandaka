@@ -125,14 +125,16 @@
       </div>
       <label>現在の口座実残高（円）</label>
       <input id="balance" type="number" min="0" placeholder="例：100000">
+      <div class="small" id="balanceDateLabel"></div>
 
       <label>今月の目標予算（上限）</label>
       <input id="monthlyBudget" type="number" min="0" placeholder="例：50000">
 
       <div style="margin-top:15px; border-top:1px solid #eee; padding-top:10px;">
-        <div class="small">給料反映後の「みらい残高」</div>
+        <div class="small">みらい残高（今日の実質残高）</div>
         <div class="metric" id="futureBalance">¥0</div>
         <div class="small" id="balanceDetail"></div>
+        <div class="small" id="balanceExtra"></div>
       </div>
 
       <div style="margin-top:15px; border-top:1px solid #eee; padding-top:10px;">
@@ -160,6 +162,12 @@
 
         <label>金額（円）</label>
         <input id="amount" type="number" min="1" required placeholder="例：1200">
+
+        <label>支払い方法（支出の場合）</label>
+        <select id="payMethod">
+          <option value="card">クレジットカード（引き落としは後日）</option>
+          <option value="cash">現金・即時払い（その日に残高が減る）</option>
+        </select>
 
         <label>カテゴリー</label>
         <select id="category">
@@ -202,7 +210,10 @@
             <h3>給料・勤務設定</h3>
             <label>基本時給（平日）（円）</label><input id="settingWage" type="number" min="1" value="1200">
             <label>土日祝の時給（円）</label><input id="settingWeekendWage" type="number" min="1" value="1300">
-            <label>毎月の給料日（日）</label><input id="settingPayDay" type="number" min="1" max="31" value="25">
+            <label>給与の締め日（日）※31=月末</label><input id="settingClosingDay" type="number" min="1" max="31" value="31">
+            <label>給料日（締めの翌月・日）</label><input id="settingPayDay" type="number" min="1" max="31" value="25">
+            <label>クレカの締め日（日）※31=月末</label><input id="settingCardClosingDay" type="number" min="1" max="31" value="31">
+            <label>クレカの引き落とし日（締めの翌月・日）</label><input id="settingCardDebitDay" type="number" min="1" max="31" value="27">
             <label>1勤務あたりの交通費（円）</label><input id="settingTransport" type="number" min="0" value="0">
             <label>深夜割増率（％）</label><input id="settingNight" type="number" min="0" max="200" step="1" value="25">
             <button type="button" id="saveShiftSettings" class="settings-save">設定を保存</button>
@@ -390,13 +401,13 @@
     }
   }
 
-  var settings={wage:1200,weekendWage:1300,payDay:25,transport:0,night:25};
+  var settings={wage:1200,weekendWage:1300,payDay:25,transport:0,night:25,closingDay:31,cardClosingDay:31,cardDebitDay:27};
   try{
     var storedSettings=JSON.parse(localStorage.getItem(settingsMasterKey));
     if(storedSettings) settings=Object.assign(settings,storedSettings);
   }catch(e){}
 
-  var data={expenses:[],shifts:{},subs:[],presets:[],balance:0,monthlyBudget:50000};
+  var data={expenses:[],shifts:{},subs:[],presets:[],balance:0,balanceDate:'',monthlyBudget:50000};
   try{
     var saved=JSON.parse(localStorage.getItem(masterKey));
     if(saved&&typeof saved==='object') data=Object.assign(data,saved);
@@ -404,6 +415,7 @@
     if(!Array.isArray(data.subs)) data.subs=[];
     if(!Array.isArray(data.presets)) data.presets=[];
     if(!data.shifts||typeof data.shifts!=='object') data.shifts={};
+    if(typeof data.balanceDate!=='string') data.balanceDate='';
   }catch(e){}
 
   function save(){
@@ -431,6 +443,7 @@
   
   el('balance').addEventListener('change',function(){
     data.balance=Number(this.value)||0;
+    data.balanceDate=today();
     save();
     renderAll();
   });
@@ -597,33 +610,139 @@
     return Math.round(worked/60*currentWage + night/60*currentWage*(v.nightRate==null?.25:v.nightRate/100) + (Number(v.transport)||0));
   }
 
-  function getReflectedBalance() {
-    var baseBal = Number(data.balance) || 0;
-    var now = new Date();
-    var curY = now.getFullYear();
-    var curM = now.getMonth();
-    var curD = now.getDate();
-    var payDay = Number(settings.payDay) || 25;
+  function fmtDate(y, m, d) {
+    return y + '-' + String(m + 1).padStart(2, '0') + '-' + String(d).padStart(2, '0');
+  }
 
-    var targetY = curY, targetM = curM;
-    if(curD < payDay) {
-      targetM -= 1;
-      if(targetM < 0) { targetM = 11; targetY -= 1; }
+  function dateParts(str) {
+    var a = String(str || '').split('-').map(Number);
+    return {y: a[0] || 1970, m: ((a[1] || 1) - 1), d: a[2] || 1};
+  }
+
+  function clampDay(y, m, day) {
+    var last = new Date(y, m + 1, 0).getDate();
+    return Math.min(Math.max(1, Number(day) || 1), last);
+  }
+
+  // 対象日が属する締め期間の締め日（'YYYY-MM-DD'）を返す
+  function closingDateFor(dateStr, closingDay) {
+    var p = dateParts(dateStr);
+    var cd = clampDay(p.y, p.m, closingDay);
+    if(p.d <= cd) return fmtDate(p.y, p.m, cd);
+    var nm = new Date(p.y, p.m + 1, 1);
+    return fmtDate(nm.getFullYear(), nm.getMonth(), clampDay(nm.getFullYear(), nm.getMonth(), closingDay));
+  }
+
+  // 与えられた日付の翌月の day 日（存在しない日は月末に丸める）
+  function nextMonthDate(dateStr, day) {
+    var p = dateParts(dateStr);
+    var nm = new Date(p.y, p.m + 1, 1);
+    return fmtDate(nm.getFullYear(), nm.getMonth(), clampDay(nm.getFullYear(), nm.getMonth(), day));
+  }
+
+  // クレカ利用日 → 引き落とし日
+  function cardDebitDateFor(usageStr) {
+    var close = closingDateFor(usageStr, Number(settings.cardClosingDay) || 31);
+    return nextMonthDate(close, Number(settings.cardDebitDay) || 27);
+  }
+
+  // 勤務日 → 給料の支払日
+  function salaryPayDateFor(shiftStr) {
+    var close = closingDateFor(shiftStr, Number(settings.closingDay) || 31);
+    return nextMonthDate(close, Number(settings.payDay) || 25);
+  }
+
+  function expenseMethod(e) {
+    if(!e || e.type === 'income') return 'cash';
+    return e.method === 'cash' ? 'cash' : 'card';
+  }
+
+  function expenseDebitDate(e) {
+    if(expenseMethod(e) !== 'card') return e.date;
+    return e.debitDate || cardDebitDateFor(e.date);
+  }
+
+  // みらい残高（今日の実質残高）の計算。仕様: BALANCE_SPEC（基準日アンカー方式）
+  function computeBalance() {
+    var todayStr = today();
+    var D = data.balanceDate || '';
+    var base = Number(data.balance) || 0;
+    var postedIncome = 0, postedSalary = 0, postedExpense = 0, pendingCard = 0;
+    function inPostedRange(postDate) {
+      return D !== '' && postDate > D && postDate <= todayStr;
     }
 
-    var totalShiftPay = 0;
-    Object.keys(data.shifts).forEach(function(k){
-      var parts = k.split('-');
-      var sy = Number(parts[0]), sm = Number(parts[1]) - 1, sd = Number(parts[2]);
-      var shiftDate = new Date(sy, sm, sd);
-      var cutoffDate = new Date(targetY, targetM, payDay);
-
-      if(shiftDate <= cutoffDate) {
-        totalShiftPay += pay(data.shifts[k], k);
+    data.expenses.forEach(function(e){
+      if(!e || !e.date) return;
+      var amt = Number(e.amount) || 0;
+      if(e.type === 'income') {
+        if(inPostedRange(e.date)) postedIncome += amt;
+        return;
+      }
+      if(expenseMethod(e) === 'card') {
+        var debit = expenseDebitDate(e);
+        if(inPostedRange(debit)) postedExpense += amt;
+        if(e.date <= todayStr && debit > todayStr) pendingCard += amt;
+      } else {
+        if(inPostedRange(e.date)) postedExpense += amt;
       }
     });
 
-    return baseBal + totalShiftPay;
+    // サブスク: 引き落とし日を発生日として、基準日の翌日〜今日に落ちた分は反映済み支出、
+    // 今日より後（62日以内）の分は別枠表示の対象にする
+    var tp = dateParts(todayStr);
+    var horizon = new Date(tp.y, tp.m, tp.d + 62);
+    var horizonStr = fmtDate(horizon.getFullYear(), horizon.getMonth(), horizon.getDate());
+    var startP = D !== '' ? dateParts(D) : tp;
+    var cur = new Date(Math.min(new Date(startP.y, startP.m, 1).getTime(), new Date(tp.y, tp.m, 1).getTime()));
+    var endMonth = new Date(horizon.getFullYear(), horizon.getMonth(), 1);
+    var futureSubList = [];
+    var guard = 0;
+    while(cur <= endMonth && guard < 240) {
+      guard++;
+      getCombinedExpenses(cur.getFullYear(), cur.getMonth()).forEach(function(e){
+        if(!e.isSub || !e.date) return;
+        if(inPostedRange(e.date)) postedExpense += Number(e.amount) || 0;
+        if(e.date > todayStr && e.date <= horizonStr) futureSubList.push(e);
+      });
+      cur = new Date(cur.getFullYear(), cur.getMonth() + 1, 1);
+    }
+
+    // 給与: 支払日が基準日の翌日〜今日なら反映済み。勤務済みで支払日が未来のものは未払い給与（別枠）
+    var unpaidByDate = {};
+    Object.keys(data.shifts).forEach(function(k){
+      var payDate = salaryPayDateFor(k);
+      var amt = pay(data.shifts[k], k);
+      if(inPostedRange(payDate)) postedSalary += amt;
+      if(k <= todayStr && payDate > todayStr) {
+        unpaidByDate[payDate] = (unpaidByDate[payDate] || 0) + amt;
+      }
+    });
+    var unpaidDates = Object.keys(unpaidByDate).sort();
+    var nextUnpaid = unpaidDates.length ? {date: unpaidDates[0], amount: unpaidByDate[unpaidDates[0]]} : null;
+
+    futureSubList.sort(function(a, b){ return a.date < b.date ? -1 : 1; });
+    var futureSubs = null;
+    if(futureSubList.length) {
+      var firstSubDate = futureSubList[0].date;
+      var firstSubsTotal = 0;
+      futureSubList.forEach(function(e){ if(e.date === firstSubDate) firstSubsTotal += Number(e.amount) || 0; });
+      futureSubs = {firstDate: firstSubDate, total: firstSubsTotal};
+    }
+
+    var estimatedBank = base + postedIncome + postedSalary - postedExpense;
+    return {
+      base: base,
+      anchorDate: D,
+      postedIncome: postedIncome,
+      postedSalary: postedSalary,
+      postedExpense: postedExpense,
+      pendingCard: pendingCard,
+      estimatedBank: estimatedBank,
+      mirai: estimatedBank - pendingCard,
+      nextUnpaid: nextUnpaid,
+      futureSubs: futureSubs
+    };
   }
 
   function renderExpenses(){
@@ -650,10 +769,25 @@
     var allIncOnly = allCurrentExpenses.filter(function(e){return e.type === 'income'});
     var allTotInc = allIncOnly.reduce(function(a,e){return a+(Number(e.amount)||0)},0);
 
-    var reflectedBal = getReflectedBalance();
-    var futureBal = reflectedBal + allTotInc - allTotExp;
-    el('futureBalance').textContent=yen(futureBal);
-    el('balanceDetail').textContent='口座ベース'+yen(reflectedBal)+' ＋ 収入'+yen(allTotInc)+' − 支出'+yen(allTotExp);
+    var bal = computeBalance();
+    el('futureBalance').textContent=yen(bal.mirai);
+    if(bal.anchorDate) {
+      el('balanceDetail').textContent='基準残高（'+bal.anchorDate+' 時点）'+yen(bal.base)+' ＋ 反映済み収入・給与'+yen(bal.postedIncome + bal.postedSalary)+' − 反映済み支出'+yen(bal.postedExpense)+' ＝ 推定銀行残高'+yen(bal.estimatedBank)+' ／ 未引き落としクレカ −'+yen(bal.pendingCard);
+    } else {
+      el('balanceDetail').textContent='基準日が未設定です。上の残高を入力し直すと、その日が基準日として記録されます（未引き落としクレカ '+yen(bal.pendingCard)+' は差し引いています）';
+    }
+    var extraParts = [];
+    if(bal.nextUnpaid) {
+      var npParts = bal.nextUnpaid.date.split('-').map(Number);
+      extraParts.push('未払い給与（別枠）：'+npParts[1]+'月'+npParts[2]+'日払い予定 '+yen(bal.nextUnpaid.amount));
+    }
+    if(bal.futureSubs) {
+      var fsParts = bal.futureSubs.firstDate.split('-').map(Number);
+      extraParts.push('今後のサブスク引落（別枠）：次回 '+fsParts[1]+'月'+fsParts[2]+'日〜 計 '+yen(bal.futureSubs.total));
+    }
+    el('balanceExtra').textContent=extraParts.join(' ／ ');
+    var bdLabel = el('balanceDateLabel');
+    if(bdLabel) bdLabel.textContent = bal.anchorDate ? ('基準日：'+bal.anchorDate+'（残高を変更すると今日に更新されます）') : '基準日：未設定（残高を入力すると今日が基準日になります）';
 
     var remain = (Number(data.monthlyBudget)||0) - allTotExp;
     var remainEl = el('remainingBudget');
@@ -689,7 +823,8 @@
       el('expenseList').innerHTML=rawFiltered.slice().reverse().map(function(e){
         var realIdx = data.expenses.indexOf(e);
         var isInc = e.type === 'income';
-        return '<div class="line"><span>'+esc(e.date)+' ['+(isInc?'収入':'支出')+'] '+esc(e.category)+'<br><span class="small">'+esc(e.memo)+'</span></span><div style="display:flex; align-items:center; gap:8px;"><b style="color:'+(isInc?'#2563eb':'#333')+'">'+(isInc?'+':'-')+yen(e.amount)+'</b><button type="button" class="delete" data-exp-index="'+realIdx+'">削除</button></div></div>';
+        var methodLabel = isInc ? '' : (expenseMethod(e)==='card' ? ' ・クレカ（'+expenseDebitDate(e).slice(5).replace('-','/')+'引落）' : ' ・現金・即時');
+        return '<div class="line"><span>'+esc(e.date)+' ['+(isInc?'収入':'支出')+'] '+esc(e.category)+'<br><span class="small">'+esc(e.memo)+methodLabel+'</span></span><div style="display:flex; align-items:center; gap:8px;"><b style="color:'+(isInc?'#2563eb':'#333')+'">'+(isInc?'+':'-')+yen(e.amount)+'</b><button type="button" class="delete" data-exp-index="'+realIdx+'">削除</button></div></div>';
       }).join('');
 
       el('expenseList').querySelectorAll('[data-exp-index]').forEach(function(b){
@@ -709,7 +844,10 @@
     var dateValue=el('date').value;
     var typeValue=el('type').value;
     if(!(amount>0)||!dateValue){el('expenseStatus').textContent='金額と日付を入力してください';return;}
-    data.expenses.push({amount:amount,category:el('category').value,memo:el('memo').value.trim(),date:dateValue,type:typeValue});
+    var methodValue = typeValue==='expense' ? el('payMethod').value : 'cash';
+    var newExpense = {amount:amount,category:el('category').value,memo:el('memo').value.trim(),date:dateValue,type:typeValue,method:methodValue};
+    if(typeValue==='expense' && methodValue==='card') newExpense.debitDate = cardDebitDateFor(dateValue);
+    data.expenses.push(newExpense);
     save();
     renderAll();
     el('expenseStatus').textContent='保存しました：'+(typeValue==='income'?'収入 ':'支出 ')+yen(amount);
@@ -719,13 +857,16 @@
 
   el('saveShiftSettings').addEventListener('click',function(){
     var w=Number(el('settingWage').value),ww=Number(el('settingWeekendWage').value),pd=Number(el('settingPayDay').value),t=Number(el('settingTransport').value),n=Number(el('settingNight').value);
+    var cd=Number(el('settingClosingDay').value),ccd=Number(el('settingCardClosingDay').value),cdd=Number(el('settingCardDebitDay').value);
     if(!(w>0)){el('settingsStatus').textContent='時給は0円より大きくしてください';return;}
-    settings={wage:w,weekendWage:ww,payDay:pd,transport:t,night:n};
+    function isDay(v){return v>=1&&v<=31;}
+    if(!isDay(pd)||!isDay(cd)||!isDay(ccd)||!isDay(cdd)){el('settingsStatus').textContent='締め日・給料日・引き落とし日は1〜31で入力してください';return;}
+    settings={wage:w,weekendWage:ww,payDay:pd,transport:t,night:n,closingDay:cd,cardClosingDay:ccd,cardDebitDay:cdd};
     try{
       localStorage.setItem(settingsMasterKey,JSON.stringify(settings));
       el('settingsStatus').textContent='設定を保存しました';
     }catch(e){el('settingsStatus').textContent='保存エラー';}
-    selectDate(selected);
+    renderAll();
   });
 
   ['start', 'end'].forEach(function(id){
@@ -1103,6 +1244,9 @@
   el('settingWage').value=settings.wage;
   el('settingWeekendWage').value=settings.weekendWage||1300;
   el('settingPayDay').value=settings.payDay||25;
+  el('settingClosingDay').value=settings.closingDay||31;
+  el('settingCardClosingDay').value=settings.cardClosingDay||31;
+  el('settingCardDebitDay').value=settings.cardDebitDay||27;
   el('settingTransport').value=settings.transport;
   el('settingNight').value=settings.night;
 
