@@ -4,9 +4,11 @@
   <!-- iPhoneなどのホーム画面用アイコン (180x180px) -->
 <link rel="apple-touch-icon" sizes="180x180" href="みらい.jpg">
 <!-- Androidなどの標準ファビコン用アイコン (32x32px) -->
-<link rel="icon" type="image/png" sizes="32x32" href="みらい.jpg">
+<link rel="icon" type="image/jpeg" sizes="32x32" href="みらい.jpg">
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="description" content="銀行残高から未引き落としのクレカ利用分を差し引いた「今日の実質残高」を見せる、学生バイト向けの家計・シフト管理アプリ">
+  <meta name="theme-color" content="#6154d8">
   <title>みらい残高・完全版</title>
 
   <!-- Google tag (gtag.js) -->
@@ -260,7 +262,7 @@
         <label>終了時刻</label><input id="end" type="time" value="17:00" required>
         <label>休憩時間（分）※労働時間に応じて自動計算されます</label><input id="break" type="number" min="0" value="60" required>
         <label>深夜帯の休憩（分）</label><input id="nightBreak" type="number" min="0" value="0" required>
-        <label>時給（円）※曜日で自動切り替わります</label><input id="wage" type="number" min="1" placeholder="1200" required>
+        <label>時給（円）※空欄なら曜日・祝日で自動判定。この日だけ変えたい場合に入力</label><input id="wage" type="number" min="1" placeholder="1200">
         <label>交通費（円）</label><input id="transport" type="number" min="0" value="0" required>
         <button type="button" data-save="1">シフトを保存してクイック追加</button>
         <button class="secondary delete" type="button" id="removeShift" style="width:100%; margin-top:8px;">この日のシフトを削除</button>
@@ -362,6 +364,7 @@
       <div class="small">今年の年間バイト総収入（見込み含む）</div>
       <div class="metric" id="totalYearlyShiftIncome" style="color:#16a58a;">¥0</div>
       <p class="small" style="margin-top:8px; color:#475569;">※103万円・130万円などの壁（税金・扶養控除）の目安としてご活用ください。</p>
+      <div id="taxWallStatus" style="margin-top:8px;"></div>
     </div>
 
     <div class="card">
@@ -483,11 +486,27 @@
     reader.onload = function(evt){
       try{
         var parsed = JSON.parse(evt.target.result);
-        if(parsed.data) data = parsed.data;
-        if(parsed.settings) settings = parsed.settings;
+        var newData = parsed && parsed.data;
+        var shapeOk = !!newData && typeof newData === 'object'
+          && Array.isArray(newData.expenses)
+          && Array.isArray(newData.subs)
+          && Array.isArray(newData.presets)
+          && !!newData.shifts && typeof newData.shifts === 'object';
+        if(!shapeOk) {
+          alert('このファイルはみらい残高のバックアップ形式ではないため、復元できませんでした。');
+          return;
+        }
+        if(!confirm('現在のデータを、選択したファイルの内容で上書きします。よろしいですか？')) return;
+        try {
+          localStorage.setItem(masterKey + '-pre-restore', JSON.stringify({data: data, settings: settings}));
+        } catch(e2) {}
+        data = newData;
+        if(parsed.settings && typeof parsed.settings === 'object') {
+          settings = Object.assign({wage:1200, weekendWage:1300, payDay:25, transport:0, night:25, closingDay:31, cardClosingDay:31, cardDebitDay:27}, parsed.settings);
+        }
         save();
         localStorage.setItem(settingsMasterKey, JSON.stringify(settings));
-        alert('データを正常に復元しました！');
+        alert('データを正常に復元しました！（復元前のデータの控えを自動保存しました）');
         location.reload();
       }catch(err){
         alert('ファイルの読み込みに失敗しました。');
@@ -498,29 +517,58 @@
 
   var colors=['#6154d8','#16a58a','#ef8e4a','#e45d7a','#4b9be5','#e1b44a','#8e7caa','#64748b'];
 
+  function baseHolidaySet(year) {
+    var set = {};
+    function add(m, d){ set[(m + 1) + '-' + d] = true; }
+    var fixed = [[0,1],[1,11],[1,23],[3,29],[4,3],[4,4],[4,5],[7,11],[10,3],[10,23]];
+    fixed.forEach(function(f){ add(f[0], f[1]); });
+    function nthMonday(monthIdx, n) {
+      var count = 0;
+      for(var d = 1; d <= 31; d++) {
+        var dt = new Date(year, monthIdx, d);
+        if(dt.getMonth() !== monthIdx) break;
+        if(dt.getDay() === 1) { count++; if(count === n) return d; }
+      }
+      return 0;
+    }
+    add(0, nthMonday(0, 2));
+    add(6, nthMonday(6, 3));
+    add(8, nthMonday(8, 3));
+    add(9, nthMonday(9, 2));
+    var vernal = Math.floor(20.8431 + 0.242194 * (year - 1980)) - Math.floor((year - 1980) / 4);
+    add(2, vernal);
+    var autumn = Math.floor(23.2488 + 0.242194 * (year - 1980)) - Math.floor((year - 1980) / 4);
+    add(8, autumn);
+    return set;
+  }
+
   function isJapaneseHoliday(year, month, day) {
-    var d = new Date(year, month, day);
-    var w = d.getDay();
-    var fixed = {
-      '1-1': '元日', '2-11': '建国記念の日', '2-23': '天皇誕生日',
-      '4-29': '昭和の日', '5-3': '憲法記念日', '5-4': 'みどりの日', '5-5': 'こどもの日',
-      '8-11': '山の日', '11-3': '文化の日', '11-23': '勤労感謝の日'
-    };
-    if(fixed[(month+1)+'-'+day]) return true;
+    var set = baseHolidaySet(year);
+    function isBase(m, d){ return !!set[(m + 1) + '-' + d]; }
+    if(isBase(month, day)) return true;
 
-    if(month === 0 && w === 1 && day >= 8 && day <= 14) return true;
-    if(month === 6 && w === 1 && day >= 15 && day <= 21) return true;
-    if(month === 8 && w === 1 && day >= 15 && day <= 21) return true;
-    if(month === 9 && w === 1 && day >= 8 && day <= 14) return true;
+    var w = new Date(year, month, day).getDay();
+    if(w === 0 || w === 6) return false;
 
-    if(month === 2) {
-      var vernal = Math.floor(20.8431 + 0.242194 * (year - 1980)) - Math.floor((year - 1980) / 4);
-      if(day === vernal) return true;
+    // Substitute holiday: scan back over consecutive base holidays;
+    // if the chain starts at a Sunday holiday, today is the substitute day.
+    var cursor = new Date(year, month, day);
+    while(true) {
+      cursor = new Date(cursor.getFullYear(), cursor.getMonth(), cursor.getDate() - 1);
+      if(cursor.getFullYear() !== year) break;
+      if(isBase(cursor.getMonth(), cursor.getDate())) {
+        if(cursor.getDay() === 0) return true;
+        continue;
+      }
+      break;
     }
-    if(month === 8) {
-      var autumn = Math.floor(23.2488 + 0.242194 * (year - 1980)) - Math.floor((year - 1980) / 4);
-      if(day === autumn) return true;
-    }
+
+    // Citizen's holiday: a weekday sandwiched between two base holidays.
+    var before = new Date(year, month, day - 1);
+    var after = new Date(year, month, day + 1);
+    var bOk = before.getFullYear() === year && isBase(before.getMonth(), before.getDate());
+    var aOk = after.getFullYear() === year && isBase(after.getMonth(), after.getDate());
+    if(bOk && aOk) return true;
 
     return false;
   }
@@ -606,7 +654,7 @@
     night=Math.max(0,night-Math.max(0,Number(v.nightBreak)||0));
     night=Math.min(night,worked);
 
-    var currentWage = wageFor(dateStr);
+    var currentWage = (Number(v.wage) > 0) ? Number(v.wage) : wageFor(dateStr);
     return Math.round(worked/60*currentWage + night/60*currentWage*(v.nightRate==null?.25:v.nightRate/100) + (Number(v.transport)||0));
   }
 
@@ -770,7 +818,9 @@
     var allTotInc = allIncOnly.reduce(function(a,e){return a+(Number(e.amount)||0)},0);
 
     var bal = computeBalance();
-    el('futureBalance').textContent=yen(bal.mirai);
+    var fbEl = el('futureBalance');
+    fbEl.textContent=yen(bal.mirai);
+    if(bal.mirai < 0) fbEl.classList.add('budget-warning'); else fbEl.classList.remove('budget-warning');
     if(bal.anchorDate) {
       el('balanceDetail').textContent='基準残高（'+bal.anchorDate+' 時点）'+yen(bal.base)+' ＋ 反映済み収入・給与'+yen(bal.postedIncome + bal.postedSalary)+' − 反映済み支出'+yen(bal.postedExpense)+' ＝ 推定銀行残高'+yen(bal.estimatedBank)+' ／ 未引き落としクレカ −'+yen(bal.pendingCard);
     } else {
@@ -859,6 +909,7 @@
     var w=Number(el('settingWage').value),ww=Number(el('settingWeekendWage').value),pd=Number(el('settingPayDay').value),t=Number(el('settingTransport').value),n=Number(el('settingNight').value);
     var cd=Number(el('settingClosingDay').value),ccd=Number(el('settingCardClosingDay').value),cdd=Number(el('settingCardDebitDay').value);
     if(!(w>0)){el('settingsStatus').textContent='時給は0円より大きくしてください';return;}
+    if(!(ww>0)){el('settingsStatus').textContent='土日祝の時給は0円より大きくしてください';return;}
     function isDay(v){return v>=1&&v<=31;}
     if(!isDay(pd)||!isDay(cd)||!isDay(ccd)||!isDay(cdd)){el('settingsStatus').textContent='締め日・給料日・引き落とし日は1〜31で入力してください';return;}
     settings={wage:w,weekendWage:ww,payDay:pd,transport:t,night:n,closingDay:cd,cardClosingDay:ccd,cardDebitDay:cdd};
@@ -869,10 +920,12 @@
     renderAll();
   });
 
+  var breakTouched = false;
+  el('break').addEventListener('input', function(){ breakTouched = true; });
   ['start', 'end'].forEach(function(id){
     el(id).addEventListener('change', function(){
       var st = el('start').value, en = el('end').value;
-      if(st && en) {
+      if(st && en && !breakTouched) {
         el('break').value = calcAutoBreak(st, en);
       }
     });
@@ -896,6 +949,7 @@
         el('start').value = p.start;
         el('end').value = p.end;
         el('break').value = p.breakMin;
+        el('wage').value = (p.wage != null && Number(p.wage) > 0) ? p.wage : '';
         el('nightBreak').value = p.nightBreak;
         el('transport').value = p.transport;
       };
@@ -924,6 +978,9 @@
     el('end').value = defaultEn;
     el('break').value = v.breakMin == null ? calcAutoBreak(defaultSt, defaultEn) : v.breakMin;
     el('nightBreak').value = v.nightBreak || 0;
+    el('wage').value = (v.wage != null && Number(v.wage) > 0) ? v.wage : '';
+    el('wage').placeholder = wageFor(s) + '（自動）';
+    breakTouched = false;
     el('transport').value = v.transport == null ? settings.transport : v.transport;
     el('shiftMemo').value = v.memo || '';
     el('shiftStatus').textContent='';
@@ -1032,6 +1089,7 @@
 
   el('shiftForm').querySelector('[data-save]').addEventListener('click',function(e){
     e.preventDefault();
+    var wageInput = Number(el('wage').value);
     var v={
       start:el('start').value,
       end:el('end').value,
@@ -1039,6 +1097,7 @@
       nightBreak:Number(el('nightBreak').value),
       transport:Number(el('transport').value),
       nightRate:settings.night,
+      wage:(wageInput > 0 ? wageInput : 0),
       memo:el('shiftMemo').value.trim() || 'コンビニ'
     };
     data.shifts[selected]=v;
@@ -1200,6 +1259,21 @@
     });
 
     el('totalYearlyShiftIncome').textContent = yen(totalYearIncome);
+
+    var wallEl = el('taxWallStatus');
+    if(wallEl) {
+      var wallHtml = '';
+      [1030000, 1300000].forEach(function(wall){
+        var remainToWall = wall - totalYearIncome;
+        var wallLabel = (wall / 10000) + '万円の壁';
+        if(remainToWall > 0) {
+          wallHtml += '<div class="line"><span>' + wallLabel + 'まで</span><b>あと ' + yen(remainToWall) + '</b></div>';
+        } else {
+          wallHtml += '<div class="line"><span>' + wallLabel + '</span><b class="budget-warning">到達済み（' + yen(-remainToWall) + ' 超過）</b></div>';
+        }
+      });
+      wallEl.innerHTML = wallHtml;
+    }
 
     var maxVal = Math.max.apply(null, Object.values(monthlyIncomeMap));
     if(maxVal === 0) maxVal = 1;
